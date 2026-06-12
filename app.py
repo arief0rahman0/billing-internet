@@ -224,8 +224,11 @@ def set_lunas(id):
     conn.commit()
     conn.close()
     
-    # TRIGGER NOTIFIKASI BOT WA LOKAL
+    # TRIGGER NOTIFIKASI BOT WA LOKAL + LINK NOTA DIGITAL
     if info and info['no_wa']:
+        # Mengambil alamat IP VPS kamu secara otomatis (contoh: http://103.x.x.x/nota/5)
+        link_nota = f"{request.host_url}nota/{id}"
+        
         pesan_wa = (
             f"🟢 *BUKTI PEMBAYARAN INTERNET LUNAS*\n\n"
             f"Yth. Bapak/Ibu *{info['nama']}*,\n"
@@ -235,6 +238,8 @@ def set_lunas(id):
             f"• Jumlah Bayar: Rp {info['jumlah_bayar']:,}\n"
             f"• Waktu Sukses: {tanggal_sekarang} WIB\n\n"
             f"Status Tagihan Anda saat ini dinyatakan: *LUNAS/PAID*.\n\n"
+            f"📄 *Link Nota Digital Resmi (Bisa Di-download/Print):*\n"
+            f"{link_nota}\n\n"
             f"📱 _Pesan ini dikirim otomatis oleh sistem Billing Internet._"
         )
         send_whatsapp(info['no_wa'], pesan_wa)
