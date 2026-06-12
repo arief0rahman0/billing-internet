@@ -255,8 +255,14 @@ def hapus_pelanggan(id):
     conn.close()
     return redirect(url_for('index'))
 
+# SEBELUMNYA:
+# @app.route('/nota/<int:id>')
+# @login_required
+# def cetak_nota(id):
+
+# DIUBAH MENJADI:
 @app.route('/nota/<int:id>')
-@login_required
+# 🚫 Baris @login_required di sini sudah dihapus agar pelanggan bisa langsung buka
 def cetak_nota(id):
     conn = get_db_connection()
     query = '''
@@ -267,6 +273,8 @@ def cetak_nota(id):
     '''
     nota = conn.execute(query, (id,)).fetchone()
     conn.close()
+    
+    # Keamanan tambahan: Nota hanya bisa dibuka jika statusnya memang sudah 'Lunas'
     if nota and nota['status'] == 'Lunas':
         return render_template('nota.html', nota=nota)
     else:
