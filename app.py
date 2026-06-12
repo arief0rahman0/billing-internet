@@ -198,6 +198,12 @@ def cetak_nota(id):
     else:
         return "Nota tidak ditemukan atau tagihan belum dilunasi.", 404
 
+#if __name__ == '__main__':
+#    init_db()
+#    app.run(debug=True)
+# PINDAHKAN KE SINI (Di luar if __name__)
+# Supaya Gunicorn di Render otomatis membuat database saat aplikasi dinyalakan
+init_db()
+
 if __name__ == '__main__':
-    init_db()
-    app.run(debug=True)
+    app.run(debug=False)
