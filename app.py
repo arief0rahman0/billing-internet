@@ -110,9 +110,30 @@ def logout():
 def index():
     generate_tagihan_otomatis()
     search_query = request.args.get('search', '')
+    bulan_sekarang = datetime.now().strftime('%Y-%m') # Contoh: 2026-06
+    
     conn = get_db_connection()
     
-    # Query mengambil kolom pembayaran.catatan
+    # 1. KODE BARU: HITUNG REKAP KEUANGAN
+    # Total Pemasukan Seluruh Waktu (Lunas)
+    total_pemasukan = conn.execute("SELECT COALESCE(SUM(jumlah_bayar), 0) FROM pembayaran WHERE status = 'Lunas'").fetchone()[0]
+    
+    # Pemasukan Bulan Ini (Lunas)
+    pemasukan_bulan_ini = conn.execute("SELECT COALESCE(SUM(jumlah_bayar), 0) FROM pembayaran WHERE status = 'Lunas' AND bulan_tagihan = ?", (bulan_sekarang,)).fetchone()[0]
+    
+    # Sisa Piutang Bulan Ini (Belum Bayar)
+    piutang_bulan_ini = conn.execute("SELECT COALESCE(SUM(jumlah_bayar), 0) FROM pembayaran WHERE status = 'Belum Bayar' AND bulan_tagihan = ?", (bulan_sekarang,)).fetchone()[0]
+    
+    # Histori Pemasukan Per Bulan (Untuk Tabel Rekap Bulanan)
+    rekap_bulanan = conn.execute('''
+        SELECT bulan_tagihan, COALESCE(SUM(jumlah_bayar), 0) AS total 
+        FROM pembayaran 
+        WHERE status = 'Lunas' 
+        GROUP BY bulan_tagihan 
+        ORDER BY bulan_tagihan DESC
+    ''').fetchall()
+    
+    # 2. QUERY UTAMA DAFTAR TAGIHAN (Sama seperti sebelumnya)
     query = '''
         SELECT pembayaran.id, pelanggan.nama AS nama_pelanggan, pembayaran.bulan_tagihan, 
                pembayaran.jumlah_bayar, pembayaran.tanggal_bayar, pembayaran.status, pembayaran.catatan
@@ -129,7 +150,17 @@ def index():
         
     daftar_pelanggan = conn.execute('SELECT * FROM pelanggan ORDER BY nama ASC').fetchall()
     conn.close()
-    return render_template('index.html', data=data_pembayaran, pelanggan=daftar_pelanggan, search_query=search_query)
+    
+    return render_template(
+        'index.html', 
+        data=data_pembayaran, 
+        pelanggan=daftar_pelanggan, 
+        search_query=search_query,
+        total_pemasukan=total_pemasukan,
+        pemasukan_bulan_ini=pemasukan_bulan_ini,
+        piutang_bulan_ini=piutang_bulan_ini,
+        rekap_bulanan=rekap_bulanan
+    )
 
 # ROUTE BARU: Update Catatan secara realtime/inline
 @app.route('/update_catatan/<int:id>', methods=['POST'])
