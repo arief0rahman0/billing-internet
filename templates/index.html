@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pembayaran Internet</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 font-sans p-3 sm:p-6 print:bg-white print:p-0 text-gray-800">
+
+    <div class="max-w-7xl mx-auto">
+        
+        <div class="flex flex-col md:flex-row justify-between items-center gap-3 mb-6 border-b pb-4 border-gray-200 print:mb-4 print:border-none">
+            <h1 class="text-xl sm:text-2xl font-extrabold text-gray-800 text-center md:text-left print:text-xl">
+                🌐 Billing Internet
+            </h1>
+            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end print:hidden">
+                <span class="text-xs bg-blue-100 text-blue-800 px-2.5 py-1 rounded-md font-semibold">👤 Admin Mode</span>
+                <a href="/logout" class="bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-xs py-2 px-4 rounded-lg shadow-sm transition">
+                    Keluar / Logout 🚪
+                </a>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <div class="lg:col-span-2 order-2 lg:order-1">
+                
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4 print:hidden">
+                    <form method="GET" action="/" class="flex gap-2 w-full sm:w-auto">
+                        <input type="text" name="search" value="{{ search_query }}" placeholder="Cari nama pelanggan..." 
+                               class="border border-gray-300 rounded-lg p-2.5 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64 bg-white shadow-sm">
+                        <button type="submit" class="bg-gray-800 hover:bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg font-semibold cursor-pointer shadow-sm">Cari</button>
+                        {% if search_query %}
+                            <a href="/" class="bg-gray-300 hover:bg-gray-400 text-gray-700 text-sm px-3 py-2.5 rounded-lg flex items-center">Reset</a>
+                        {% endif %}
+                    </form>
+
+                    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow flex items-center gap-2 w-full sm:w-auto justify-center cursor-pointer transition">
+                        🖨️ Cetak / PDF
+                    </button>
+                </div>
+
+                <div class="hidden md:block bg-white rounded-xl shadow-md overflow-hidden print:shadow-none print:border print:border-gray-300">
+                    <div class="p-4 bg-gray-50 border-b border-gray-200 print:hidden">
+                        <h2 class="font-bold text-gray-700 text-sm">Daftar Tagihan Bulanan (Otomatis)</h2>
+                    </div>
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-800 text-white print:bg-gray-100 print:text-black print:border-b print:border-gray-300">
+                                <th class="p-3 text-xs uppercase font-semibold">No</th>
+                                <th class="p-3 text-xs uppercase font-semibold">Pelanggan</th>
+                                <th class="p-3 text-xs uppercase font-semibold">Bulan</th>
+                                <th class="p-3 text-xs uppercase font-semibold">Tagihan</th>
+                                <th class="p-3 text-xs uppercase font-semibold">Tanggal Bayar</th>
+                                <th class="p-3 text-xs uppercase font-semibold">Status</th>
+                                <th class="p-3 text-xs uppercase font-semibold">Catatan</th>
+                                <th class="p-3 text-xs uppercase font-semibold text-center print:hidden">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if not data %}
+                            <tr>
+                                <td colspan="8" class="text-center p-6 text-gray-500">Belum ada data tagihan.</td>
+                            </tr>
+                            {% endif %}
+                            {% for row in data %}
+                            <tr class="border-b border-gray-200 hover:bg-gray-50 print:hover:bg-transparent">
+                                <td class="p-3 text-sm font-medium">{{ loop.index }}</td>
+                                <td class="p-3 text-sm font-semibold text-gray-700">{{ row['nama_pelanggan'] }}</td>
+                                <td class="p-3 text-sm text-gray-600">{{ row['bulan_tagihan'] }}</td>
+                                <td class="p-3 text-sm font-medium text-gray-800">Rp {{ "{:,}".format(row['jumlah_bayar']) }}</td>
+                                <td class="p-3 text-xs text-gray-600">{{ row['tanggal_bayar'] }}</td>
+                                <td class="p-3 text-sm">
+                                    {% if row['status'] == 'Lunas' %}
+                                    <span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full print:text-green-700">Lunas</span>
+                                    {% else %}
+                                    <span class="bg-red-100 text-red-800 text-xs font-bold px-2.5 py-1 rounded-full print:text-red-700">Belum Bayar</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3 text-sm">
+                                    <form action="/update_catatan/{{ row['id'] }}" method="POST" class="flex gap-1 items-center print:hidden">
+                                        <input type="text" name="catatan" value="{{ row['catatan'] or '' }}" placeholder="..." 
+                                               class="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 w-full max-w-[140px] bg-gray-50">
+                                        <button type="submit" class="bg-gray-200 hover:bg-gray-300 px-1 py-1 rounded text-xs">💾</button>
+                                    </form>
+                                    <span class="hidden print:inline text-xs text-gray-600">{{ row['catatan'] or '-' }}</span>
+                                </td>
+                                <td class="p-3 text-sm text-center print:hidden">
+                                    {% if row['status'] != 'Lunas' %}
+                                    <a href="/lunas/{{ row['id'] }}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition">Set Lunas</a>
+                                    {% else %}
+                                    <a href="/nota/{{ row['id'] }}" target="_blank" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition inline-flex items-center gap-1">📄 Nota</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="block md:hidden space-y-3 print:hidden">
+                    {% if not data %}
+                    <p class="text-center p-6 bg-white rounded-lg text-gray-500 shadow-sm">Belum ada data tagihan.</p>
+                    {% endif %}
+                    {% for row in data %}
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-gray-800 text-base">{{ row['nama_pelanggan'] }}</h3>
+                                <p class="text-xs text-gray-500">Periode: <span class="font-semibold text-gray-700">{{ row['bulan_tagihan'] }}</span></p>
+                            </div>
+                            {% if row['status'] == 'Lunas' %}
+                            <span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full">Lunas</span>
+                            {% else %}
+                            <span class="bg-red-100 text-red-800 text-xs font-bold px-2.5 py-1 rounded-full">Belum Bayar</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 bg-gray-50 p-2.5 rounded-lg text-xs border border-gray-100">
+                            <div>
+                                <span class="text-gray-400 block">Total Tagihan</span>
+                                <span class="font-bold text-gray-800 text-sm">Rp {{ "{:,}".format(row['jumlah_bayar']) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block">Waktu Bayar</span>
+                                <span class="text-gray-700 font-medium">{{ row['tanggal_bayar'] }}</span>
+                            </div>
+                        </div>
+
+                        <form action="/update_catatan/{{ row['id'] }}" method="POST" class="flex gap-2 items-center">
+                            <input type="text" name="catatan" value="{{ row['catatan'] or '' }}" placeholder="Tambah catatan (cth: Rapel)..." 
+                                   class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full bg-gray-50">
+                            <button type="submit" class="bg-gray-800 hover:bg-gray-900 text-white text-sm px-3 py-2 rounded-lg font-bold">💾</button>
+                        </form>
+
+                        <div class="pt-1">
+                            {% if row['status'] != 'Lunas' %}
+                            <a href="/lunas/{{ row['id'] }}" class="block text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow transition">
+                                💰 Konfirmasi Set Lunas
+                            </a>
+                            {% else %}
+                            <a href="/nota/{{ row['id'] }}" target="_blank" class="block text-center bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow transition">
+                                📄 Buka & Cetak Nota Resmi
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="space-y-6 order-1 lg:order-2 print:hidden">
+                
+                <div class="bg-white p-5 rounded-xl shadow-md border border-gray-200">
+                    <h2 class="text-base font-bold mb-4 text-gray-700 border-b pb-2 flex items-center gap-1">➕ Daftar Pelanggan Tetap</h2>
+                    <form action="/tambah_pelanggan" method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Lengkap</label>
+                            <input type="text" name="nama" required placeholder="Contoh: Ahmad" class="w-full border border-gray-300 rounded-lg p-2.5 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tarif Bulanan (Rp)</label>
+                            <input type="number" name="tagihan" required placeholder="Contoh: 150000" class="w-full border border-gray-300 rounded-lg p-2.5 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer shadow">
+                            Simpan Anggota
+                        </button>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b border-gray-200">
+                        <h2 class="font-bold text-sm text-gray-700">📋 Pelanggan Aktif ({{ pelanggan|length }})</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                        {% if not pelanggan %}
+                        <p class="p-4 text-sm text-center text-gray-400">Belum ada pelanggan.</p>
+                        {% endif %}
+                        {% for p in pelanggan %}
+                        <div class="p-3.5 flex justify-between items-center text-sm hover:bg-gray-50">
+                            <div>
+                                <p class="font-bold text-gray-800">{{ p['nama'] }}</p>
+                                <p class="text-xs text-gray-500">Rp {{ "{:,}".format(p['tagihan_bulanan']) }}/bln</p>
+                            </div>
+                            <a href="/hapus_pelanggan/{{ p['id'] }}" onclick="return confirm('Hapus pelanggan beserta seluruh riwayat transaksinya?')" class="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 py-2 px-3 rounded-lg transition">
+                                Hapus
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
