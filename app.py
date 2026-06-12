@@ -280,6 +280,29 @@ def cetak_nota(id):
     else:
         return "Nota tidak ditemukan atau tagihan belum dilunasi.", 404
 
+@app.route('/whatsapp')
+@login_required
+def whatsapp_status():
+    """Halaman panel kontrol status WhatsApp dan Scan Barcode"""
+    try:
+        # Minta data status dan QR dari bot Node.js port 3000
+        response = requests.get("http://127.0.0.1:3000/status", timeout=5)
+        status_data = response.json()
+    except Exception as e:
+        status_data = {"connected": False, "qr": None, "error": "Server Bot Node.js tidak merespon"}
+        
+    return render_template('whatsapp.html', status=status_data)
+
+@app.route('/whatsapp/logout')
+@login_required
+def whatsapp_logout():
+    """Rute untuk memicu putus koneksi / ganti nomor baru"""
+    try:
+        requests.post("http://127.0.0.1:3000/logout", timeout=5)
+    except Exception:
+        pass
+    return redirect(url_for('whatsapp_status'))
+
 # Inisialisasi diletakkan di luar blok '__main__' agar terbaca Gunicorn VPS
 init_db()
 
