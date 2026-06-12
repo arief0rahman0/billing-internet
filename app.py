@@ -3,9 +3,32 @@ import sqlite3
 from datetime import datetime
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+import requests
 
 app = Flask(__name__)
 app.secret_key = 'kunci_rahasia_aplikasi_internet_lokal'
+
+# ==========================================
+# KONFIGURASI WHATSAPP BOT LOKAL (PORT 3000)
+# ==========================================
+def send_whatsapp(no_hp, pesan):
+    """Mengirim pesan WA via Server Bot Lokal buatan sendiri di Port 3000"""
+    if not no_hp:
+        return False
+        
+    url = "http://127.0.0.1:3000/send"
+    data = {
+        "target": no_hp,
+        "message": pesan
+    }
+    try:
+        # Menembak API internal Node.js di VPS yang sama
+        response = requests.post(url, data=data, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Gagal mengirim WhatsApp Lokal: {e}")
+        return False
+# ==========================================
 
 def get_db_connection():
     conn = sqlite3.connect('pembayaran_internet.db')
@@ -14,6 +37,7 @@ def get_db_connection():
 
 def init_db():
     conn = get_db_connection()
+    
     # 1. TABEL ADMIN
     conn.execute('''
         CREATE TABLE IF NOT EXISTS admin_user (
@@ -37,7 +61,13 @@ def init_db():
         )
     ''')
     
-    # 3. TABEL TRANSAKSI TAGIHAN (Ditambahkan kolom catatan)
+    # Migrasi Otomatis: Tambah kolom no_wa jika belum ada di database lama
+    try:
+        conn.execute('ALTER TABLE pelanggan ADD COLUMN no_wa TEXT DEFAULT ""')
+    except sqlite3.OperationalError:
+        pass 
+
+    # 3. TABEL TRANSAKSI TAGIHAN
     conn.execute('''
         CREATE TABLE IF NOT EXISTS pembayaran (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,32 +140,23 @@ def logout():
 def index():
     generate_tagihan_otomatis()
     search_query = request.args.get('search', '')
-    bulan_sekarang = datetime.now().strftime('%Y-%m') # Contoh: 2026-06
+    bulan_sekarang = datetime.now().strftime('%Y-%m')
     
     conn = get_db_connection()
     
-    # 1. KODE BARU: HITUNG REKAP KEUANGAN
-    # Total Pemasukan Seluruh Waktu (Lunas)
+    # HITUNG REKAP KEUANGAN
     total_pemasukan = conn.execute("SELECT COALESCE(SUM(jumlah_bayar), 0) FROM pembayaran WHERE status = 'Lunas'").fetchone()[0]
-    
-    # Pemasukan Bulan Ini (Lunas)
     pemasukan_bulan_ini = conn.execute("SELECT COALESCE(SUM(jumlah_bayar), 0) FROM pembayaran WHERE status = 'Lunas' AND bulan_tagihan = ?", (bulan_sekarang,)).fetchone()[0]
-    
-    # Sisa Piutang Bulan Ini (Belum Bayar)
     piutang_bulan_ini = conn.execute("SELECT COALESCE(SUM(jumlah_bayar), 0) FROM pembayaran WHERE status = 'Belum Bayar' AND bulan_tagihan = ?", (bulan_sekarang,)).fetchone()[0]
     
-    # Histori Pemasukan Per Bulan (Untuk Tabel Rekap Bulanan)
     rekap_bulanan = conn.execute('''
         SELECT bulan_tagihan, COALESCE(SUM(jumlah_bayar), 0) AS total 
-        FROM pembayaran 
-        WHERE status = 'Lunas' 
-        GROUP BY bulan_tagihan 
-        ORDER BY bulan_tagihan DESC
+        FROM pembayaran WHERE status = 'Lunas' 
+        GROUP BY bulan_tagihan ORDER BY bulan_tagihan DESC
     ''').fetchall()
     
-    # 2. QUERY UTAMA DAFTAR TAGIHAN (Sama seperti sebelumnya)
     query = '''
-        SELECT pembayaran.id, pelanggan.nama AS nama_pelanggan, pembayaran.bulan_tagihan, 
+        SELECT pembayaran.id, pelanggan.nama AS nama_pelanggan, pelanggan.no_wa, pembayaran.bulan_tagihan, 
                pembayaran.jumlah_bayar, pembayaran.tanggal_bayar, pembayaran.status, pembayaran.catatan
         FROM pembayaran
         JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id
@@ -152,17 +173,10 @@ def index():
     conn.close()
     
     return render_template(
-        'index.html', 
-        data=data_pembayaran, 
-        pelanggan=daftar_pelanggan, 
-        search_query=search_query,
-        total_pemasukan=total_pemasukan,
-        pemasukan_bulan_ini=pemasukan_bulan_ini,
-        piutang_bulan_ini=piutang_bulan_ini,
-        rekap_bulanan=rekap_bulanan
+        'index.html', data=data_pembayaran, pelanggan=daftar_pelanggan, search_query=search_query,
+        total_pemasukan=total_pemasukan, pemasukan_bulan_ini=pemasukan_bulan_ini, piutang_bulan_ini=piutang_bulan_ini, rekap_bulanan=rekap_bulanan
     )
 
-# ROUTE BARU: Update Catatan secara realtime/inline
 @app.route('/update_catatan/<int:id>', methods=['POST'])
 @login_required
 def update_catatan(id):
@@ -178,9 +192,11 @@ def update_catatan(id):
 def tambah_pelanggan():
     nama = request.form['nama']
     tagihan = request.form['tagihan']
+    no_wa = request.form['no_wa']
+    
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO pelanggan (nama, tagihan_bulanan) VALUES (?, ?)', (nama, tagihan))
+    cursor.execute('INSERT INTO pelanggan (nama, tagihan_bulanan, no_wa) VALUES (?, ?, ?)', (nama, tagihan, no_wa))
     pelanggan_id = cursor.lastrowid
     
     bulan_sekarang = datetime.now().strftime('%Y-%m')
@@ -197,9 +213,32 @@ def tambah_pelanggan():
 def set_lunas(id):
     tanggal_sekarang = datetime.now().strftime('%Y-%m-%d %H:%M')
     conn = get_db_connection()
+    
+    query_info = '''
+        SELECT pelanggan.nama, pelanggan.no_wa, pembayaran.bulan_tagihan, pembayaran.jumlah_bayar 
+        FROM pembayaran JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id WHERE pembayaran.id = ?
+    '''
+    info = conn.execute(query_info, (id,)).fetchone()
+    
     conn.execute('UPDATE pembayaran SET status = ?, tanggal_bayar = ? WHERE id = ?', ('Lunas', tanggal_sekarang, id))
     conn.commit()
     conn.close()
+    
+    # TRIGGER NOTIFIKASI BOT WA LOKAL
+    if info and info['no_wa']:
+        pesan_wa = (
+            f"🟢 *BUKTI PEMBAYARAN INTERNET LUNAS*\n\n"
+            f"Yth. Bapak/Ibu *{info['nama']}*,\n"
+            f"Terima kasih, pembayaran tagihan internet Anda telah kami terima.\n\n"
+            f"📦 *Detail Transaksi:*\n"
+            f"• Periode Bulan: {info['bulan_tagihan']}\n"
+            f"• Jumlah Bayar: Rp {info['jumlah_bayar']:,}\n"
+            f"• Waktu Sukses: {tanggal_sekarang} WIB\n\n"
+            f"Status Tagihan Anda saat ini dinyatakan: *LUNAS/PAID*.\n\n"
+            f"📱 _Pesan ini dikirim otomatis oleh sistem Billing Internet._"
+        )
+        send_whatsapp(info['no_wa'], pesan_wa)
+        
     return redirect(url_for('index'))
 
 @app.route('/hapus_pelanggan/<int:id>')
@@ -219,8 +258,7 @@ def cetak_nota(id):
         SELECT pembayaran.id, pelanggan.nama AS nama_pelanggan, pembayaran.bulan_tagihan, 
                pembayaran.jumlah_bayar, pembayaran.tanggal_bayar, pembayaran.status, pembayaran.catatan
         FROM pembayaran
-        JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id
-        WHERE pembayaran.id = ?
+        JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id WHERE pembayaran.id = ?
     '''
     nota = conn.execute(query, (id,)).fetchone()
     conn.close()
@@ -229,11 +267,7 @@ def cetak_nota(id):
     else:
         return "Nota tidak ditemukan atau tagihan belum dilunasi.", 404
 
-#if __name__ == '__main__':
-#    init_db()
-#    app.run(debug=True)
-# PINDAHKAN KE SINI (Di luar if __name__)
-# Supaya Gunicorn di Render otomatis membuat database saat aplikasi dinyalakan
+# Inisialisasi diletakkan di luar blok '__main__' agar terbaca Gunicorn VPS
 init_db()
 
 if __name__ == '__main__':
