@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Pelanggan</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200 w-full max-w-md">
+        <h2 class="text-md font-bold text-gray-700 border-b pb-2 mb-4">📝 Edit Informasi Pelanggan</h2>
+        <form method="POST" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Lengkap</label>
+                <input type="text" name="nama" value="{{ p['nama'] }}" required class="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tarif Paket Bulanan (Rp)</label>
+                <input type="number" name="tagihan" value="{{ p['tagihan_bulanan'] }}" required class="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nomor WhatsApp</label>
+                <input type="text" name="no_wa" value="{{ p['no_wa'] }}" required class="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50">
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded text-sm hover:bg-blue-700 cursor-pointer">Simpan Perubahan</button>
+                <a href="/" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded text-sm text-center hover:bg-gray-300">Batal</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

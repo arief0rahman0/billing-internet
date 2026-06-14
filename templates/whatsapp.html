@@ -3,80 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pengaturan WhatsApp Gateway</title>
+    <title>WhatsApp Bot Gateway Status</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
-<body class="bg-gray-100 font-sans p-4 sm:p-8 text-gray-800">
+<body class="bg-gray-100 font-sans min-h-screen flex items-center justify-center p-4">
 
-    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden mt-6 sm:mt-12">
-        
-        <div class="p-5 bg-gray-800 text-white flex justify-between items-center">
-            <h1 class="font-extrabold text-base">⚙️ WA Gateway Panel</h1>
-            <a href="/" class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg font-bold transition">
-                ⬅️ Dashboard
-            </a>
-        </div>
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div class="p-6 text-center space-y-4">
+            <h1 class="text-xl font-black text-gray-800 tracking-tight">🤖 STATUS WHATSAPP BOT GATEWAY</h1>
+            <div class="divider border-b"></div>
 
-        <div class="p-6 text-center space-y-6">
-            
             {% if status.connected %}
-                <div class="space-y-4">
-                    <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-4xl animate-pulse">
-                        ✅
-                    </div>
-                    <div>
-                        <h2 class="text-xl font-black text-emerald-600">Bot WA Aktif</h2>
-                        <p class="text-xs text-gray-500 mt-1">Server lokal berhasil terhubung dan siap mengirim kuitansi otomatis.</p>
-                    </div>
-                    
-                    <div class="pt-4 border-t border-gray-100">
-                        <a href="/whatsapp/logout" onclick="return confirm('Apakah Anda yakin ingin memutus koneksi nomor ini untuk menggantinya dengan nomor baru?')" 
-                           class="inline-block bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold py-2.5 px-5 rounded-xl border border-rose-200 transition">
-                            🔴 Putus Koneksi / Ganti Nomor
-                        </a>
-                    </div>
-                </div>
+            <div class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl space-y-2">
+                <div class="text-lg font-bold">🟢 STATUS: TERHUBUNG (CONNECTED)</div>
+                <p class="text-xs text-gray-600">Sistem otomatis pengiriman pesan nota dan tagihan WhatsApp berjalan aktif.</p>
+            </div>
+            <a href="/whatsapp/logout" onclick="return confirm('Putuskan koneksi bot nomor WhatsApp ini?')" 
+               class="inline-block bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-6 rounded text-sm transition shadow">
+                Disconnect / Logout Nomor
+            </a>
             {% else %}
-                <div class="space-y-4">
-                    <div>
-                        <h2 class="text-lg font-extrabold text-gray-700">Tautkan Nomor WhatsApp</h2>
-                        <p class="text-xs text-gray-400 mt-1">Buka WhatsApp di HP Anda ➡️ Perangkat Tertaut ➡️ Tautkan Perangkat, lalu arahkan kamera ke barcode di bawah.</p>
-                    </div>
+            <div class="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl space-y-2">
+                <div class="text-md font-bold">⚠️ STATUS: BELUM TERTAUT</div>
+                <p class="text-xs text-gray-600">Silakan scan kode QR di bawah menggunakan menu WhatsApp Linked Devices di HP Anda.</p>
+            </div>
 
-                    {% if status.qr %}
-                        <div class="flex justify-center p-4 bg-gray-50 border border-gray-200 rounded-2xl w-64 h-64 mx-auto items-center">
-                            <div id="qrcode_holder"></div>
-                        </div>
-                        <p class="text-[11px] text-amber-600 font-medium animate-pulse">🔄 Halaman akan otomatis masuk setelah barcode berhasil di-scan...</p>
+                {% if status.qr %}
+                <div class="flex justify-center bg-white p-3 border border-gray-300 rounded-xl w-fit mx-auto shadow-sm">
+                    <img src="{{ status.qr }}" alt="Scan QR Code WA Bot" class="w-64 h-64">
+                </div>
+                <p class="text-[10px] text-gray-400 animate-pulse">Kode QR otomatis diperbarui, langsung scan sekarang.</p>
+                {% else %}
+                <div class="p-8 border border-dashed rounded-xl text-gray-400 text-xs font-bold">
+                    {% if status.error %}
+                    {{ status.error }}
                     {% else %}
-                        <div class="p-6 bg-amber-50 text-amber-800 rounded-xl text-xs font-semibold">
-                            ⚠️ {{ status.error or 'Sedang membuat kode barcode baru, mohon tunggu sebentar...' }}
-                        </div>
+                    Sedang memuat kode QR, tunggu sebentar...
                     {% endif %}
                 </div>
+                {% endif %}
             {% endif %}
 
+            <div class="pt-2">
+                <a href="/" class="text-sm font-bold text-blue-600 hover:underline">← Kembali ke Dashboard Utama</a>
+            </div>
         </div>
     </div>
-
-    {% if not status.connected and status.qr %}
-    <script>
-        // Gambar Teks QR dari Baileys menjadi Barcode Kotak Kotak
-        new QRCode(document.getElementById("qrcode_holder"), {
-            text: "{{ status.qr }}",
-            width: 220,
-            height: 220,
-            colorDark : "#1f2937",
-            colorLight : "#f9fafb"
-        });
-
-        // REFRESH OTOMATIS: Cek status login ke server setiap 5 detik
-        setTimeout(function(){
-            location.reload();
-        }, 5000);
-    </script>
-    {% endif %}
 
 </body>
 </html>
