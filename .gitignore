@@ -1,3 +1,14 @@
-pembayaran_internet.db
+# WhatsApp session
+wabot/session_data/
+
+# Node
+wabot/node_modules/
+
+# Python
 venv/
 __pycache__/
+*.pyc
+
+# Database
+*.db
+*.sqlite
