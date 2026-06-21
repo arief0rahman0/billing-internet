@@ -735,29 +735,31 @@
 
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('click', function(e) {
+    const a = e.target.closest('a');
+    if (!a) return;
+    
     const csrfToken = "{{ csrf_token() }}";
     const postUrls = ['/lunas/', '/kirim_wa_lunas/', '/kirim_wa_pengingat/', '/hapus_pelanggan/'];
-    document.querySelectorAll('a').forEach(a => {
-        const href = a.getAttribute('href');
-        if (href && postUrls.some(url => href.startsWith(url))) {
-            a.addEventListener('click', function(e) {
-                e.preventDefault();
-                if(confirm('Tindakan ini akan mengubah data. Lanjutkan?')) {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = href;
-                    const csrfInput = document.createElement('input');
-                    csrfInput.type = 'hidden';
-                    csrfInput.name = 'csrf_token';
-                    csrfInput.value = csrfToken;
-                    form.appendChild(csrfInput);
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            });
+    const href = a.getAttribute('href');
+    
+    if (href && postUrls.some(url => href.startsWith(url))) {
+        e.preventDefault();
+        if(confirm('Tindakan ini akan mengubah data. Lanjutkan?')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = href;
+            
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            
+            form.appendChild(csrfInput);
+            document.body.appendChild(form);
+            form.submit();
         }
-    });
+    }
 });
 </script>
 </body>

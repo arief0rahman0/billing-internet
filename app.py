@@ -808,6 +808,36 @@ def wa_status_api():
         data = {"connected": False, "qr": None}
     return jsonify(data)
 
+# ==========================================
+# PENGAMANAN GLOBAL HTTP SECURITY HEADERS
+# ==========================================
+@app.after_request
+def add_security_headers(response):
+    # 1. Mencegah Clickjacking (Aplikasi tidak bisa di-embed di iframe orang lain)
+    response.headers['X-Frame-Options'] = 'DENY'
+    
+    # 2. Mencegah MIME Sniffing (Memaksa browser mematuhi Content-Type asli)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
+    # 3. Proteksi XSS pada browser-browser lama
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # 4. Memaksa browser selalu menggunakan HTTPS (HSTS)
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
+    # Tambahan: Mencegah kebocoran informasi server backend
+    response.headers['Server'] = 'Secure Server'
+    
+    return response
+
+# Custom handler untuk error 500 agar tidak membocorkan detail internal request
+@app.errorhandler(500)
+def internal_server_error(e):
+    return "Terjadi kesalahan internal pada server. Silakan coba beberapa saat lagi.", 500
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return "Halaman tidak ditemukan.", 404
 
 # =============================================================================
 # ENTRY POINT

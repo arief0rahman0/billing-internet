@@ -1,5 +1,6 @@
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const express = require('express');
+const qrcode = require('qrcode');
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
@@ -20,12 +21,16 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         // Simpan text QR ke dalam variabel global jika ada
         if (qr) {
-            qrCodeText = qr;
+            try {
+                qrCodeText = await qrcode.toDataURL(qr);
+            } catch (err) {
+                qrCodeText = qr;
+            }
             isConnected = false;
         }
 

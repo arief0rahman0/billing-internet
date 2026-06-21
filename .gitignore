@@ -3,3 +3,4 @@ venv/
 __pycache__/
 wa-gateway/node_modules/
 wa-gateway/auth_info_baileys/
+*.json
