@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup & Restore - Billing Internet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='Logo2.png') }}">
+    <script>
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/40 via-purple-50/20 to-white dark:from-indigo-900/20 dark:via-[#0b0f19] dark:to-[#0b0f19] animate-fade-in-up">
+
+    <div class="w-full max-w-xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-2xl shadow-indigo-500/10 dark:shadow-none border border-slate-200/50 dark:border-slate-800/50 overflow-hidden transition-all duration-300 z-10">
+        
+        <!-- Header -->
+        <div class="p-5 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md text-slate-800 dark:text-white flex justify-between items-center border-b border-slate-200/50 dark:border-slate-800/50 shadow-sm">
+            <h1 class="font-extrabold text-sm tracking-tight flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Backup & Kelola Database
+            </h1>
+            
+            <div class="flex items-center gap-3">
+                <button onclick="toggleTheme()" class="p-2.5 rounded-xl bg-white/50 hover:bg-white/80 dark:bg-slate-800/50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 transition duration-200 cursor-pointer shadow-sm border border-slate-200/50 dark:border-slate-700/50 relative z-[100]" aria-label="Toggle Theme">
+                    <svg class="w-4 h-4 hidden dark:block text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                    </svg>
+                    <svg class="w-4 h-4 block dark:hidden text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
+                <a href="/" class="text-xs bg-slate-200 hover:bg-slate-350 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-650 dark:text-slate-300 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer">
+                    ⬅️ Kembali
+                </a>
+            </div>
+
+        </div>
+
+        <!-- Flash Message -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="px-8 pt-6">
+                {% for category, message in messages %}
+                <div class="p-4 rounded-xl text-xs font-bold leading-relaxed flex items-start gap-2.5 shadow-inner 
+                    {% if category == 'error' %} bg-rose-50/80 border border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800/50 dark:text-rose-300
+                    {% else %} bg-emerald-50/80 border border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-300 {% endif %}">
+                    <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        {% if category == 'error' %}
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        {% else %}
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        {% endif %}
+                    </svg>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Content -->
+        <div class="p-8 space-y-8">
+            
+            <!-- Download Section -->
+            <div class="space-y-4">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-indigo-400 to-purple-500 text-white rounded-xl shadow-lg shadow-indigo-500/30 shrink-0">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-200">Unduh Backup Database</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                            Simpan salinan database (pemasukan, data pelanggan, dll) ke perangkat Anda. Lakukan backup secara berkala untuk mencegah kehilangan data.
+                        </p>
+                        <a href="/backup/download" class="mt-4 inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 border-none cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download Database (.db)
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-slate-200/50 dark:border-slate-800/50">
+
+            <!-- Restore Section -->
+            <div class="space-y-4">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-rose-400 to-orange-500 text-white rounded-xl shadow-lg shadow-rose-500/30 shrink-0">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                    </div>
+                    <div class="w-full">
+                        <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-200">Restore Database</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                            Ganti database saat ini dengan file backup yang pernah Anda unduh. <strong class="text-rose-500">Peringatan:</strong> Data saat ini akan tertimpa permanen.
+                        </p>
+                        <form action="/backup/restore" method="POST" enctype="multipart/form-data" class="mt-4 flex flex-col sm:flex-row gap-3">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <input type="file" name="db_file" accept=".db" required class="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 dark:file:bg-rose-900/20 dark:file:text-rose-300 dark:hover:file:bg-rose-900/40 transition">
+                            <button type="submit" onclick="return confirm('Peringatan: Ini akan mengganti seluruh data Anda dengan data dari file backup. Lanjutkan?')" class="whitespace-nowrap bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5 border-none cursor-pointer">
+                                Restore Data
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+    </script>
+</body>
+
+</html>
