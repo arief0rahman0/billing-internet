@@ -6,3 +6,8 @@ wa-gateway/auth_info_baileys/
 *.json
 .agents/
 tests/
+.env.example
+fix_csrf.py
+render_test.html
+test_app.py
+update.sh
