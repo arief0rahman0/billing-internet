@@ -7,7 +7,7 @@ __pycache__/
 wa-gateway/node_modules/
 wa-gateway/auth_info_baileys/
 auth_info_baileys/
-*.json
+wa-gateway/package-lock.json
 .agents/
 tests/
 .env.example
