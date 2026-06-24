@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 import sqlite3
 import urllib.parse
@@ -96,6 +98,145 @@ def send_whatsapp(no_hp, pesan):
     except Exception as e:
         print(f"[WA] Gagal kirim WhatsApp ke {no_hp}: {e}")
         return False
+
+
+def send_whatsapp_pdf(no_hp, pdf_bytes, filename, caption=""):
+    """Kirim file PDF via WA bot lokal Baileys. Return True jika sukses."""
+    if not no_hp:
+        return False
+    url = "http://127.0.0.1:3000/send-pdf"
+    pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    data = {
+        "target": no_hp,
+        "pdf_base64": pdf_base64,
+        "filename": filename,
+        "caption": caption,
+    }
+    try:
+        response = requests.post(url, json=data, timeout=30)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"[WA] Gagal kirim PDF ke {no_hp}: {e}")
+        return False
+
+
+def generate_pdf_nota(nota_data):
+    """Generate nota pembayaran sebagai PDF menggunakan reportlab. Return bytes."""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A5
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    except ImportError:
+        print("[PDF] reportlab belum terinstall. Jalankan: pip install reportlab")
+        return None
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A5,
+        rightMargin=15*mm,
+        leftMargin=15*mm,
+        topMargin=15*mm,
+        bottomMargin=15*mm,
+    )
+
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Style definisi
+    style_title = ParagraphStyle(
+        "title", parent=styles["Normal"],
+        fontSize=14, fontName="Helvetica-Bold",
+        alignment=TA_CENTER, spaceAfter=2
+    )
+    style_subtitle = ParagraphStyle(
+        "subtitle", parent=styles["Normal"],
+        fontSize=9, fontName="Helvetica",
+        alignment=TA_CENTER, spaceAfter=8, textColor=colors.grey
+    )
+    style_center = ParagraphStyle(
+        "center", parent=styles["Normal"],
+        fontSize=9, alignment=TA_CENTER
+    )
+    style_label = ParagraphStyle(
+        "label", parent=styles["Normal"],
+        fontSize=9, fontName="Helvetica"
+    )
+
+    # Header
+    elements.append(Paragraph("NOTA PEMBAYARAN INTERNET", style_title))
+    elements.append(Paragraph("Bukti Pembayaran Resmi", style_subtitle))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#2563eb")))
+    elements.append(Spacer(1, 6*mm))
+
+    # Nomor nota
+    no_nota = f"NOTA/{nota_data['id']:04d}/{datetime.now().strftime('%m%Y')}"
+    elements.append(Paragraph(f"No. Nota: <b>{no_nota}</b>", style_center))
+    elements.append(Spacer(1, 4*mm))
+
+    # Tabel detail
+    detail_data = [
+        [Paragraph("<b>Nama Pelanggan</b>", style_label), Paragraph(f": {nota_data['nama_pelanggan']}", style_label)],
+        [Paragraph("<b>Periode Tagihan</b>", style_label), Paragraph(f": {nota_data['bulan_tagihan']}", style_label)],
+        [Paragraph("<b>Tanggal Bayar</b>",  style_label), Paragraph(f": {nota_data['tanggal_bayar']} WIB", style_label)],
+        [Paragraph("<b>Status</b>",          style_label), Paragraph(": <font color='green'><b>LUNAS ✓</b></font>", style_label)],
+    ]
+    tbl = Table(detail_data, colWidths=[45*mm, 75*mm])
+    tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f1f5f9"), colors.white]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(tbl)
+    elements.append(Spacer(1, 5*mm))
+
+    # Total bayar (highlight)
+    jumlah_fmt = f"Rp {nota_data['jumlah_bayar']:,}".replace(",", ".")
+    total_data = [[Paragraph("TOTAL PEMBAYARAN", ParagraphStyle(
+        "tot_label", parent=styles["Normal"],
+        fontSize=10, fontName="Helvetica-Bold",
+        alignment=TA_CENTER, textColor=colors.white
+    )), Paragraph(jumlah_fmt, ParagraphStyle(
+        "tot_val", parent=styles["Normal"],
+        fontSize=12, fontName="Helvetica-Bold",
+        alignment=TA_CENTER, textColor=colors.white
+    ))]]
+    tbl_total = Table(total_data, colWidths=[60*mm, 60*mm])
+    tbl_total.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#2563eb")),
+        ("ROUNDEDCORNERS", [5]),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(tbl_total)
+    elements.append(Spacer(1, 5*mm))
+
+    # Catatan
+    if nota_data.get("catatan"):
+        elements.append(Paragraph(f"Catatan: {nota_data['catatan']}", ParagraphStyle(
+            "catatan", parent=styles["Normal"],
+            fontSize=8, textColor=colors.grey, alignment=TA_CENTER
+        )))
+        elements.append(Spacer(1, 3*mm))
+
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+    elements.append(Spacer(1, 3*mm))
+    elements.append(Paragraph(
+        "Dokumen ini diterbitkan secara digital oleh sistem Billing Internet.<br/>"
+        "Dokumen ini sah tanpa tanda tangan.",
+        ParagraphStyle("footer", parent=styles["Normal"],
+                       fontSize=7, alignment=TA_CENTER, textColor=colors.grey)
+    ))
+
+    doc.build(elements)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
 
 
 # =============================================================================
@@ -571,12 +712,13 @@ def cetak_nota(id):
 @app.route("/kirim_wa_lunas/<int:id>", methods=["POST"])
 @login_required
 def kirim_wa_lunas(id):
-    """Kirim pesan kuitansi/nota WA ke pelanggan yang sudah Lunas."""
+    """Kirim nota PDF via WA ke pelanggan yang sudah Lunas."""
     conn = get_db_connection()
     info = conn.execute(
         """
-        SELECT pelanggan.nama, pelanggan.no_wa,
-               pembayaran.bulan_tagihan, pembayaran.jumlah_bayar, pembayaran.tanggal_bayar
+        SELECT pembayaran.id, pelanggan.nama, pelanggan.no_wa,
+               pembayaran.bulan_tagihan, pembayaran.jumlah_bayar,
+               pembayaran.tanggal_bayar, pembayaran.catatan
         FROM pembayaran
         JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id
         WHERE pembayaran.id = ?
@@ -586,8 +728,19 @@ def kirim_wa_lunas(id):
     conn.close()
 
     if info and info["no_wa"]:
-        link_nota = f"{request.host_url}nota/{id}"
-        pesan_wa = (
+        nota_data = {
+            "id": info["id"],
+            "nama_pelanggan": info["nama"],
+            "bulan_tagihan": info["bulan_tagihan"],
+            "jumlah_bayar": info["jumlah_bayar"],
+            "tanggal_bayar": info["tanggal_bayar"],
+            "catatan": info["catatan"],
+        }
+
+        # Generate PDF nota
+        pdf_bytes = generate_pdf_nota(nota_data)
+
+        caption_wa = (
             f"🟢 *BUKTI PEMBAYARAN INTERNET LUNAS*\n\n"
             f"Yth. Bapak/Ibu *{info['nama']}*,\n"
             f"Terima kasih, pembayaran tagihan internet Anda telah kami terima.\n\n"
@@ -596,13 +749,21 @@ def kirim_wa_lunas(id):
             f"• Jumlah Bayar: Rp {info['jumlah_bayar']:,}\n"
             f"• Waktu Sukses: {info['tanggal_bayar']} WIB\n\n"
             f"Status Tagihan Anda saat ini dinyatakan: *LUNAS/PAID*.\n\n"
-            f"📄 *Link Nota Digital Resmi (Bisa Di-download/Print):*\n"
-            f"{link_nota}\n\n"
+            f"📎 _Nota PDF terlampir. Simpan sebagai bukti pembayaran resmi._\n"
             f"📱 _Pesan ini dikirim oleh sistem Billing Internet._"
         )
-        send_whatsapp(info["no_wa"], pesan_wa)
 
-    flash("Nota WA berhasil terkirim.", "success")
+        no_nota = f"NOTA-{info['id']:04d}-{datetime.now().strftime('%m%Y')}"
+        filename = f"{no_nota}.pdf"
+
+        if pdf_bytes:
+            # Kirim PDF sebagai dokumen WA
+            send_whatsapp_pdf(info["no_wa"], pdf_bytes, filename, caption_wa)
+        else:
+            # Fallback: kirim pesan teks jika PDF gagal
+            send_whatsapp(info["no_wa"], caption_wa)
+
+    flash("Nota PDF WA berhasil terkirim.", "success")
     return redirect(url_for("index"))
 
 

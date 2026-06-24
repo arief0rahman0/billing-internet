@@ -142,6 +142,45 @@ app.post("/send", async (req, res) => {
   }
 });
 
+// Endpoint kirim PDF sebagai dokumen WhatsApp
+app.post("/send-pdf", async (req, res) => {
+  let target = req.body.target;
+  const caption = req.body.caption || "";
+  const pdfBase64 = req.body.pdf_base64;
+  const filename = req.body.filename || "nota_pembayaran.pdf";
+
+  if (
+    typeof target !== "string" ||
+    typeof pdfBase64 !== "string" ||
+    !target.trim() ||
+    !pdfBase64.trim()
+  )
+    return res
+      .status(400)
+      .json({ status: false, error: "Parameter tidak valid" });
+
+  if (target.startsWith("0")) {
+    target = "62" + target.slice(1);
+  }
+  if (!target.endsWith("@s.whatsapp.net")) {
+    target = target + "@s.whatsapp.net";
+  }
+
+  try {
+    const pdfBuffer = Buffer.from(pdfBase64, "base64");
+    await sock.sendMessage(target, {
+      document: pdfBuffer,
+      mimetype: "application/pdf",
+      fileName: filename,
+      caption: caption,
+    });
+    res.json({ status: true, message: "PDF terkirim" });
+  } catch (err) {
+    res.status(500).json({ status: false, error: err.message });
+  }
+});
+
+
 connectToWhatsApp();
 app.listen(3000, "127.0.0.1", () => {
   console.log("API WA Gateway aktif di http://127.0.0.1:3000");
