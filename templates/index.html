@@ -579,8 +579,12 @@
                             Daftar Pelanggan Tetap
                         </h2>
                         
-                        <form action="/tambah_pelanggan" method="POST" class="space-y-4">
+                        <form action="/tambah_pelanggan" method="POST" class="space-y-4" onsubmit="const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.innerHTML = 'Menyimpan...';">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <!-- Honeypot field (anti-bot) -->
+                            <div style="display:none;" aria-hidden="true">
+                                <input type="text" name="hp_field" tabindex="-1" autocomplete="off">
+                            </div>
                             <div class="space-y-1">
                                 <label class="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Nama Lengkap</label>
                                 <input type="text" name="nama" required placeholder="Contoh: Ahmad" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-750 text-slate-800 dark:text-slate-200 transition-all">
@@ -629,7 +633,7 @@
                                 <div class="flex gap-1 shrink-0">
                                     <a href="/edit_pelanggan/{{ p['id'] }}" class="text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white py-1 px-2.5 rounded-lg shadow shadow-amber-400/30 transition duration-200">Edit</a>
                                     {% if session['role'] == 'admin' %}
-                                    <a href="/hapus_pelanggan/{{ p['id'] }}" onclick="return confirm('Hapus pelanggan? Seluruh transaksi terkait pelanggan ini juga akan ikut terhapus otomatis.')" class="text-[10px] font-bold text-rose-600 hover:text-white dark:text-rose-400 dark:hover:text-white hover:bg-rose-600 dark:hover:bg-rose-600 border border-rose-300 dark:border-rose-800/60 shadow-sm hover:shadow-rose-500/20 text-rose-600 dark:text-rose-400 py-1 px-2.5 rounded-lg transition duration-200">Hapus</a>
+                                    <a href="/hapus_pelanggan/{{ p['id'] }}" data-confirm="Hapus pelanggan? Seluruh transaksi terkait pelanggan ini juga akan ikut terhapus otomatis." class="text-[10px] font-bold text-rose-600 hover:text-white dark:text-rose-400 dark:hover:text-white hover:bg-rose-600 dark:hover:bg-rose-600 border border-rose-300 dark:border-rose-800/60 shadow-sm hover:shadow-rose-500/20 text-rose-600 dark:text-rose-400 py-1 px-2.5 rounded-lg transition duration-200">Hapus</a>
                                     {% endif %}
                                 </div>
                             </div>
@@ -764,7 +768,9 @@ document.addEventListener('click', function(e) {
     
     if (href && postUrls.some(url => href.startsWith(url))) {
         e.preventDefault();
-        if(confirm('Tindakan ini akan mengubah data. Lanjutkan?')) {
+        
+        let confirmMsg = a.getAttribute('data-confirm') || 'Tindakan ini akan mengubah data. Lanjutkan?';
+        if(confirm(confirmMsg)) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = href;

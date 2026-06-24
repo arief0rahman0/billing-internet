@@ -72,7 +72,7 @@
                     </div>
                 </div>
                 <div class="space-y-1">
-                    <h2 class="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Billing Internet</h2>
+                    <!-- Removed title -->
                 </div>
             </div>
 
@@ -85,8 +85,12 @@
             {% endif %}
 
             <!-- Login Form -->
-            <form method="POST" action="/login" class="space-y-4">
+            <form method="POST" action="/login" class="space-y-4" onsubmit="const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.innerHTML = 'Memproses...';">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <!-- Honeypot field (anti-bot) -->
+                <div style="display:none;" aria-hidden="true">
+                    <input type="text" name="hp_field" tabindex="-1" autocomplete="off">
+                </div>
                 <!-- Username -->
                 <div class="space-y-1">
                     <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Username</label>
@@ -96,7 +100,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
                         </span>
-                        <input type="text" name="username" required placeholder="Masukkan username" 
+                        <input type="text" name="username" required placeholder="Username" 
                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2.5 pl-10 pr-3.5 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-700 focus:border-slate-400 dark:focus:border-slate-700 transition-all placeholder-slate-400 dark:placeholder-slate-650">
                     </div>
                 </div>
@@ -118,7 +122,7 @@
                 <!-- TOTP 2FA -->
                 <div class="space-y-1">
                     <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex justify-between">
-                        <span>Kode Keamanan 2FA</span>
+                        <span>Code</span>
                     </label>
                     <div class="relative group">
                         <input type="text" name="totp_code" required placeholder="000000" inputmode="numeric" pattern="[0-9]*" maxlength="6"
@@ -127,10 +131,7 @@
                 </div>
 
                 <button type="submit" class="w-full mt-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-500/30 border-none font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5">
-                    Masuk ke Dashboard
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
+                    Login
                 </button>
             </form>
 

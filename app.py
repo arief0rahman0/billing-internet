@@ -248,6 +248,10 @@ def login():
 
     error = None
     if request.method == "POST":
+        if request.form.get("hp_field"):
+            error = "Aktivitas mencurigakan (bot) terdeteksi!"
+            return render_template("login.html", error=error)
+
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         totp_code = request.form.get("totp_code", "").strip()
@@ -375,9 +379,14 @@ def index():
 # ROUTES: MANAJEMEN PELANGGAN
 # =============================================================================
 @app.route("/tambah_pelanggan", methods=["POST"])
+@limiter.limit("5 per minute")
 @login_required
 def tambah_pelanggan():
     """Tambah pelanggan baru dan buat tagihan bulan berjalan."""
+    if request.form.get("hp_field"):
+        flash("Aktivitas mencurigakan (bot) terdeteksi!", "error")
+        return redirect(url_for("index"))
+
     nama = request.form.get("nama", "").strip()
     tagihan_raw = request.form.get("tagihan", "0").strip()
     no_wa = request.form.get("no_wa", "").strip()
