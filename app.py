@@ -1,21 +1,30 @@
 import base64
 import io
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import sqlite3
 import urllib.parse
 from datetime import datetime
 from functools import wraps
 
-import pyotp
+import re
 import requests
+
 from flask import (Flask, flash, jsonify, redirect, render_template, request,
-                   send_file, session, url_for)
+                   send_file, send_from_directory, session, url_for)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
+
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from database import get_db_connection, init_db, get_setting, set_setting, log_action, generate_tagihan_otomatis
+from utils import send_whatsapp, send_whatsapp_pdf, generate_pdf_nota
+from auth import login_required, admin_required, password_change_required
+
 
 # =============================================================================
 # INISIALISASI APLIKASI
@@ -34,6 +43,8 @@ if not app.secret_key:
         'Jalankan: export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")'
         " lalu tambahkan ke /etc/systemd/system/billing.service"
     )
+
+
 
 # =============================================================================
 # KONFIGURASI KEAMANAN SESSION & COOKIE
@@ -61,13 +72,16 @@ def add_security_headers(response):
     )
     response.headers["Server"] = "Secure Server"
     # Content-Security-Policy: izinkan CDN yang digunakan
+    # Untuk domain app1.billing-internet.web.id dengan reverse proxy
+    # Sementara di-nonaktifkan untuk testing dark mode
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data: https://api.qrserver.com; "
-        "connect-src 'self';"
+        "default-src 'self' app1.billing-internet.web.id; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com app1.billing-internet.web.id; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com app1.billing-internet.web.id; "
+        "font-src 'self' https://fonts.gstatic.com app1.billing-internet.web.id; "
+        "img-src 'self' data: https://api.qrserver.com /static/ app1.billing-internet.web.id; "
+        "connect-src 'self' app1.billing-internet.web.id; "
+        "upgrade-insecure-requests;"
     )
     return response
 
@@ -84,302 +98,9 @@ limiter = Limiter(
 
 
 # =============================================================================
-# HELPER: KIRIM WHATSAPP VIA BOT LOKAL (PORT 3000)
-# =============================================================================
-def send_whatsapp(no_hp, pesan):
-    """Kirim pesan WA via bot lokal Baileys. Return True jika sukses."""
-    if not no_hp:
-        return False
-    url = "http://127.0.0.1:3000/send"
-    data = {"target": no_hp, "message": pesan}
-    try:
-        response = requests.post(url, json=data, timeout=10)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"[WA] Gagal kirim WhatsApp ke {no_hp}: {e}")
-        return False
-
-
-def send_whatsapp_pdf(no_hp, pdf_bytes, filename, caption=""):
-    """Kirim file PDF via WA bot lokal Baileys. Return True jika sukses."""
-    if not no_hp:
-        return False
-    url = "http://127.0.0.1:3000/send-pdf"
-    pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
-    data = {
-        "target": no_hp,
-        "pdf_base64": pdf_base64,
-        "filename": filename,
-        "caption": caption,
-    }
-    try:
-        response = requests.post(url, json=data, timeout=30)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"[WA] Gagal kirim PDF ke {no_hp}: {e}")
-        return False
-
-
-def generate_pdf_nota(nota_data):
-    """Generate nota pembayaran sebagai PDF menggunakan reportlab. Return bytes."""
-    try:
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A5
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import mm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    except ImportError:
-        print("[PDF] reportlab belum terinstall. Jalankan: pip install reportlab")
-        return None
-
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A5,
-        rightMargin=15*mm,
-        leftMargin=15*mm,
-        topMargin=15*mm,
-        bottomMargin=15*mm,
-    )
-
-    styles = getSampleStyleSheet()
-    elements = []
-
-    # Style definisi
-    style_title = ParagraphStyle(
-        "title", parent=styles["Normal"],
-        fontSize=14, fontName="Helvetica-Bold",
-        alignment=TA_CENTER, spaceAfter=2
-    )
-    style_subtitle = ParagraphStyle(
-        "subtitle", parent=styles["Normal"],
-        fontSize=9, fontName="Helvetica",
-        alignment=TA_CENTER, spaceAfter=8, textColor=colors.grey
-    )
-    style_center = ParagraphStyle(
-        "center", parent=styles["Normal"],
-        fontSize=9, alignment=TA_CENTER
-    )
-    style_label = ParagraphStyle(
-        "label", parent=styles["Normal"],
-        fontSize=9, fontName="Helvetica"
-    )
-
-    # Header
-    elements.append(Paragraph("NOTA PEMBAYARAN INTERNET", style_title))
-    elements.append(Paragraph("Bukti Pembayaran Resmi", style_subtitle))
-    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#2563eb")))
-    elements.append(Spacer(1, 6*mm))
-
-    # Nomor nota
-    no_nota = f"NOTA/{nota_data['id']:04d}/{datetime.now().strftime('%m%Y')}"
-    elements.append(Paragraph(f"No. Nota: <b>{no_nota}</b>", style_center))
-    elements.append(Spacer(1, 4*mm))
-
-    # Tabel detail
-    detail_data = [
-        [Paragraph("<b>Nama Pelanggan</b>", style_label), Paragraph(f": {nota_data['nama_pelanggan']}", style_label)],
-        [Paragraph("<b>Periode Tagihan</b>", style_label), Paragraph(f": {nota_data['bulan_tagihan']}", style_label)],
-        [Paragraph("<b>Tanggal Bayar</b>",  style_label), Paragraph(f": {nota_data['tanggal_bayar']} WIB", style_label)],
-        [Paragraph("<b>Status</b>",          style_label), Paragraph(": <font color='green'><b>LUNAS ✓</b></font>", style_label)],
-    ]
-    tbl = Table(detail_data, colWidths=[45*mm, 75*mm])
-    tbl.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f1f5f9"), colors.white]),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(tbl)
-    elements.append(Spacer(1, 5*mm))
-
-    # Total bayar (highlight)
-    jumlah_fmt = f"Rp {nota_data['jumlah_bayar']:,}".replace(",", ".")
-    total_data = [[Paragraph("TOTAL PEMBAYARAN", ParagraphStyle(
-        "tot_label", parent=styles["Normal"],
-        fontSize=10, fontName="Helvetica-Bold",
-        alignment=TA_CENTER, textColor=colors.white
-    )), Paragraph(jumlah_fmt, ParagraphStyle(
-        "tot_val", parent=styles["Normal"],
-        fontSize=12, fontName="Helvetica-Bold",
-        alignment=TA_CENTER, textColor=colors.white
-    ))]]
-    tbl_total = Table(total_data, colWidths=[60*mm, 60*mm])
-    tbl_total.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#2563eb")),
-        ("ROUNDEDCORNERS", [5]),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    elements.append(tbl_total)
-    elements.append(Spacer(1, 5*mm))
-
-    # Catatan
-    if nota_data.get("catatan"):
-        elements.append(Paragraph(f"Catatan: {nota_data['catatan']}", ParagraphStyle(
-            "catatan", parent=styles["Normal"],
-            fontSize=8, textColor=colors.grey, alignment=TA_CENTER
-        )))
-        elements.append(Spacer(1, 3*mm))
-
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
-    elements.append(Spacer(1, 3*mm))
-    elements.append(Paragraph(
-        "Dokumen ini diterbitkan secara digital oleh sistem Billing Internet.<br/>"
-        "Dokumen ini sah tanpa tanda tangan.",
-        ParagraphStyle("footer", parent=styles["Normal"],
-                       fontSize=7, alignment=TA_CENTER, textColor=colors.grey)
-    ))
-
-    doc.build(elements)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
-
-
-# =============================================================================
-# DATABASE
-# =============================================================================
-def get_db_connection():
-    """Buka koneksi SQLite. Selalu tutup setelah selesai."""
-    db_path = app.config.get("DATABASE", "pembayaran_internet.db")
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")  # Aktifkan foreign key constraint
-    return conn
-
-
-def init_db():
-    """Inisialisasi schema database dan buat akun default jika belum ada."""
-    conn = get_db_connection()
-
-    # Tabel admin_user
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS admin_user (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'admin',
-            totp_secret TEXT DEFAULT ''
-        )
-    """)
-    # Migrasi kolom legacy jika belum ada
-    for col_def in [
-        "ALTER TABLE admin_user ADD COLUMN role TEXT DEFAULT 'admin'",
-        "ALTER TABLE admin_user ADD COLUMN totp_secret TEXT DEFAULT ''",
-    ]:
-        try:
-            conn.execute(col_def)
-        except sqlite3.OperationalError:
-            pass
-
-    # Akun admin default (WAJIB ganti password setelah deploy pertama)
-    if not conn.execute(
-        "SELECT id FROM admin_user WHERE username = ?", ("admin",)
-    ).fetchone():
-        conn.execute(
-            "INSERT INTO admin_user (username, password, role) VALUES (?, ?, ?)",
-            ("admin", generate_password_hash("admin123"), "admin"),
-        )
-
-    # Akun operator default
-    if not conn.execute(
-        "SELECT id FROM admin_user WHERE username = ?", ("operator",)
-    ).fetchone():
-        conn.execute(
-            "INSERT INTO admin_user (username, password, role) VALUES (?, ?, ?)",
-            ("operator", generate_password_hash("operator123"), "operator"),
-        )
-
-    # Tabel pelanggan
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS pelanggan (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nama TEXT NOT NULL,
-            tagihan_bulanan INTEGER NOT NULL
-        )
-    """)
-    try:
-        conn.execute('ALTER TABLE pelanggan ADD COLUMN no_wa TEXT DEFAULT ""')
-    except sqlite3.OperationalError:
-        pass
-
-    # Tabel pembayaran
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS pembayaran (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pelanggan_id INTEGER NOT NULL,
-            bulan_tagihan TEXT NOT NULL,
-            jumlah_bayar INTEGER NOT NULL,
-            tanggal_bayar TEXT,
-            status TEXT NOT NULL,
-            catatan TEXT DEFAULT '',
-            FOREIGN KEY (pelanggan_id) REFERENCES pelanggan (id) ON DELETE CASCADE
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-
-# =============================================================================
-# DEKORATOR AUTH
-# =============================================================================
-def login_required(f):
-    """Redirect ke halaman login jika belum login."""
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if "logged_in" not in session:
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-
-    return decorated_function
-
-
-def admin_required(f):
-    """Tolak akses jika bukan role admin."""
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if session.get("role") != "admin":
-            flash("Akses ditolak! Fitur ini hanya untuk akun admin.", "error")
-            return redirect(url_for("index"))
-        return f(*args, **kwargs)
-
-    return decorated_function
-
-
-# =============================================================================
-# HELPER: GENERATE TAGIHAN OTOMATIS
-# =============================================================================
-def generate_tagihan_otomatis():
-    """Buat tagihan bulan berjalan untuk semua pelanggan yang belum punya tagihan."""
-    conn = get_db_connection()
-    bulan_sekarang = datetime.now().strftime("%Y-%m")
-    semua_pelanggan = conn.execute(
-        "SELECT id, tagihan_bulanan FROM pelanggan"
-    ).fetchall()
-    for p in semua_pelanggan:
-        existing = conn.execute(
-            "SELECT id FROM pembayaran WHERE pelanggan_id = ? AND bulan_tagihan = ?",
-            (p["id"], bulan_sekarang),
-        ).fetchone()
-        if not existing:
-            conn.execute(
-                """INSERT INTO pembayaran
-                   (pelanggan_id, bulan_tagihan, jumlah_bayar, tanggal_bayar, status, catatan)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (p["id"], bulan_sekarang, p["tagihan_bulanan"], "-", "Belum Bayar", ""),
-            )
-    conn.commit()
-    conn.close()
-
-
-# =============================================================================
 # ROUTES: AUTH
 # =============================================================================
+
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute")
 def login():
@@ -395,7 +116,6 @@ def login():
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        totp_code = request.form.get("totp_code", "").strip()
 
         if not username or not password:
             error = "Username dan password harus diisi."
@@ -407,34 +127,123 @@ def login():
             conn.close()
 
             if user and check_password_hash(user["password"], password):
-                if user["totp_secret"]:
-                    totp = pyotp.TOTP(user["totp_secret"])
-                    if totp.verify(totp_code):
-                        session.permanent = True
-                        session["logged_in"] = True
-                        session["username"] = user["username"]
-                        session["role"] = user["role"]
-                        return redirect(url_for("index"))
-                    else:
-                        error = "Kode Keamanan TOTP (6 Digit) Salah atau Kedaluwarsa!"
-                else:
-                    # 2FA belum aktif — ijinkan login langsung
-                    session.permanent = True
-                    session["logged_in"] = True
-                    session["username"] = user["username"]
-                    session["role"] = user["role"]
-                    return redirect(url_for("index"))
+                # Jika user belum mendaftarkan nomor WA, arahkan ke setup OTP
+                if not user["no_wa"]:
+                    session["setup_user_id"] = user["id"]
+                    return redirect(url_for("setup_otp"))
+
+                # Generate 6-digit OTP
+                import time
+                import random
+                otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
+                
+                # Simpan di session sementara (5 menit)
+                session["otp"] = otp
+                session["otp_expiry"] = time.time() + 300
+                session["pending_user_id"] = user["id"]
+                session["pending_username"] = user["username"]
+                session["pending_role"] = user["role"]
+                session["force_password_change"] = user["force_password_change"] if user["force_password_change"] else 0
+
+                # Kirim OTP via WhatsApp
+                pesan = f"🔒 *KODE OTP LOGIN*\n\nKode OTP Anda adalah: *{otp}*\n\nBerlaku selama 5 menit. Jangan berikan kode ini kepada siapapun."
+                from utils import send_whatsapp
+                send_whatsapp(user["no_wa"], pesan)
+                
+                return redirect(url_for("verify_otp"))
             else:
                 error = "Username atau Password salah!"
 
     return render_template("login.html", error=error)
 
+@app.route("/setup_otp", methods=["GET", "POST"])
+def setup_otp():
+    if "setup_user_id" not in session:
+        return redirect(url_for("login"))
+        
+    error = None
+    if request.method == "POST":
+        no_wa = request.form.get("no_wa", "").strip()
+        if not no_wa:
+            error = "Nomor WhatsApp harus diisi."
+        else:
+            conn = get_db_connection()
+            conn.execute("UPDATE admin_user SET no_wa = ? WHERE id = ?", (no_wa, session["setup_user_id"]))
+            conn.commit()
+            conn.close()
+            session.pop("setup_user_id", None)
+            return redirect(url_for("login"))
+            
+    return render_template("setup_otp.html", error=error)
+
+@app.route("/verify_otp", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
+def verify_otp():
+    if "pending_user_id" not in session:
+        return redirect(url_for("login"))
+        
+    error = None
+    if request.method == "POST":
+        import time
+        otp_input = request.form.get("otp", "").strip()
+        
+        if time.time() > session.get("otp_expiry", 0):
+            error = "Kode OTP sudah kedaluwarsa. Silakan login kembali."
+            session.pop("pending_user_id", None)
+            session.pop("otp", None)
+        elif otp_input == session.get("otp"):
+            session.permanent = True
+            session["logged_in"] = True
+            session["username"] = session["pending_username"]
+            session["role"] = session["pending_role"]
+            
+            log_action(session["username"], "Login", "Berhasil login ke sistem dengan OTP")
+            
+            # Check if user is required to change password
+            force_change = session.pop("force_password_change", 0)
+            
+            session.pop("pending_user_id", None)
+            session.pop("pending_username", None)
+            session.pop("pending_role", None)
+            session.pop("otp", None)
+            session.pop("otp_expiry", None)
+            
+            if force_change == 1:
+                flash("Anda wajib mengubah password default sebelum melanjutkan.", "warning")
+                return redirect(url_for("ganti_password"))
+            
+            return redirect(url_for("index"))
+        else:
+            error = "Kode OTP salah!"
+            
+    return render_template("verify_otp.html", error=error)
+
+
 
 @app.route("/logout")
 def logout():
     """Hapus semua session dan redirect ke login."""
+    if "username" in session:
+        log_action(session["username"], "Logout", "Keluar dari sistem")
     session.clear()
     return redirect(url_for("login"))
+
+
+# =============================================================================
+# ROUTES: PWA (Progressive Web App)
+# =============================================================================
+@app.route("/manifest.json")
+def manifest():
+    return send_file(os.path.join(app.root_path, "static", "manifest.json"), mimetype="application/manifest+json")
+
+@app.route("/sw.js")
+def service_worker():
+    return send_file(os.path.join(app.root_path, "static", "sw.js"), mimetype="application/javascript")
+
+@app.route("/debug_login")
+def debug_login():
+    """Debug page for testing login dark mode functionality."""
+    return send_file(os.path.join(app.root_path, "debug_login.html"))
 
 
 # =============================================================================
@@ -442,11 +251,27 @@ def logout():
 # =============================================================================
 @app.route("/")
 @login_required
+@password_change_required
 def index():
-    """Dashboard utama: daftar pembayaran, statistik, chart."""
+    """Redirect root ke dashboard."""
+    return redirect(url_for("dashboard"))
+
+
+# =============================================================================
+# ROUTES: DASHBOARD PAGES
+# =============================================================================
+@app.route("/dashboard")
+@login_required
+@password_change_required
+def dashboard():
+    """Dashboard overview dengan statistik dan chart."""
     generate_tagihan_otomatis()
-    search_query = request.args.get("search", "").strip()
     bulan_sekarang = datetime.now().strftime("%Y-%m")
+
+    # Pagination parameters
+    page_pelanggan = request.args.get('page_pelanggan', 1, type=int)
+    page_transaksi = request.args.get('page_transaksi', 1, type=int)
+    per_page = 10  # Items per page
 
     conn = get_db_connection()
 
@@ -464,12 +289,6 @@ def index():
         (bulan_sekarang,),
     ).fetchone()[0]
 
-    rekap_bulanan = conn.execute("""
-        SELECT bulan_tagihan, COALESCE(SUM(jumlah_bayar), 0) AS total
-        FROM pembayaran WHERE status = 'Lunas'
-        GROUP BY bulan_tagihan ORDER BY bulan_tagihan DESC
-    """).fetchall()
-
     chart_raw = conn.execute("""
         SELECT bulan_tagihan, COALESCE(SUM(jumlah_bayar), 0) AS total
         FROM pembayaran WHERE status = 'Lunas'
@@ -477,6 +296,73 @@ def index():
     """).fetchall()
     chart_labels = [row["bulan_tagihan"] for row in chart_raw]
     chart_data = [row["total"] for row in chart_raw]
+
+    # Get total count for pelanggan
+    total_pelanggan = conn.execute(
+        "SELECT COUNT(*) FROM pelanggan"
+    ).fetchone()[0]
+    
+    # Get paginated pelanggan
+    offset_pelanggan = (page_pelanggan - 1) * per_page
+    daftar_pelanggan = conn.execute(
+        "SELECT * FROM pelanggan ORDER BY nama ASC LIMIT ? OFFSET ?",
+        (per_page, offset_pelanggan)
+    ).fetchall()
+
+    # Get total count for transaksi
+    total_transaksi = conn.execute(
+        "SELECT COUNT(*) FROM pembayaran"
+    ).fetchone()[0]
+    
+    # Get paginated transaksi terbaru
+    offset_transaksi = (page_transaksi - 1) * per_page
+    transaksi_terbaru = conn.execute("""
+        SELECT pembayaran.id, pelanggan.id AS pelanggan_id,
+               pelanggan.nama AS nama_pelanggan, pelanggan.no_wa,
+               pembayaran.bulan_tagihan, pembayaran.jumlah_bayar,
+               pembayaran.tanggal_bayar, pembayaran.status, pembayaran.catatan
+        FROM pembayaran
+        JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id
+        ORDER BY pembayaran.bulan_tagihan DESC, pembayaran.id DESC
+        LIMIT ? OFFSET ?
+    """, (per_page, offset_transaksi)).fetchall()
+    
+    conn.close()
+
+    # Calculate pagination info
+    total_pages_pelanggan = (total_pelanggan + per_page - 1) // per_page
+    total_pages_transaksi = (total_transaksi + per_page - 1) // per_page
+
+    return render_template(
+        "dashboard.html",
+        pelanggan=daftar_pelanggan,
+        transaksi=transaksi_terbaru,
+        total_pemasukan=total_pemasukan,
+        pemasukan_bulan_ini=pemasukan_bulan_ini,
+        piutang_bulan_ini=piutang_bulan_ini,
+        chart_labels=chart_labels,
+        chart_data=chart_data,
+        # Pagination info for pelanggan
+        page_pelanggan=page_pelanggan,
+        total_pages_pelanggan=total_pages_pelanggan,
+        total_pelanggan=total_pelanggan,
+        # Pagination info for transaksi
+        page_transaksi=page_transaksi,
+        total_pages_transaksi=total_pages_transaksi,
+        total_transaksi=total_transaksi,
+        per_page=per_page,
+    )
+
+
+@app.route("/transaksi")
+@login_required
+@password_change_required
+def transaksi():
+    """Halaman kelola transaksi/pembayaran."""
+    generate_tagihan_otomatis()
+    search_query = request.args.get("search", "").strip()
+
+    conn = get_db_connection()
 
     base_query = """
         SELECT pembayaran.id, pelanggan.id AS pelanggan_id,
@@ -497,19 +383,57 @@ def index():
             base_query + " ORDER BY pembayaran.bulan_tagihan DESC, pembayaran.id DESC"
         ).fetchall()
 
+    conn.close()
+
+    return render_template(
+        "transaksi.html",
+        data=data_pembayaran,
+        search_query=search_query,
+    )
+
+
+@app.route("/pelanggan")
+@login_required
+@password_change_required
+def pelanggan():
+    """Halaman kelola pelanggan."""
+    conn = get_db_connection()
     daftar_pelanggan = conn.execute(
         "SELECT * FROM pelanggan ORDER BY nama ASC"
     ).fetchall()
     conn.close()
 
     return render_template(
-        "index.html",
-        data=data_pembayaran,
+        "pelanggan.html",
         pelanggan=daftar_pelanggan,
-        search_query=search_query,
-        total_pemasukan=total_pemasukan,
-        pemasukan_bulan_ini=pemasukan_bulan_ini,
-        piutang_bulan_ini=piutang_bulan_ini,
+    )
+
+
+@app.route("/laporan")
+@login_required
+@password_change_required
+def laporan():
+    """Halaman laporan keuangan."""
+    conn = get_db_connection()
+
+    rekap_bulanan = conn.execute("""
+        SELECT bulan_tagihan, COALESCE(SUM(jumlah_bayar), 0) AS total
+        FROM pembayaran WHERE status = 'Lunas'
+        GROUP BY bulan_tagihan ORDER BY bulan_tagihan DESC
+    """).fetchall()
+
+    chart_raw = conn.execute("""
+        SELECT bulan_tagihan, COALESCE(SUM(jumlah_bayar), 0) AS total
+        FROM pembayaran WHERE status = 'Lunas'
+        GROUP BY bulan_tagihan ORDER BY bulan_tagihan ASC LIMIT 12
+    """).fetchall()
+    chart_labels = [row["bulan_tagihan"] for row in chart_raw]
+    chart_data = [row["total"] for row in chart_raw]
+
+    conn.close()
+
+    return render_template(
+        "laporan.html",
         rekap_bulanan=rekap_bulanan,
         chart_labels=chart_labels,
         chart_data=chart_data,
@@ -522,11 +446,12 @@ def index():
 @app.route("/tambah_pelanggan", methods=["POST"])
 @limiter.limit("5 per minute")
 @login_required
+@password_change_required
 def tambah_pelanggan():
     """Tambah pelanggan baru dan buat tagihan bulan berjalan."""
     if request.form.get("hp_field"):
         flash("Aktivitas mencurigakan (bot) terdeteksi!", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("pelanggan"))
 
     nama = request.form.get("nama", "").strip()
     tagihan_raw = request.form.get("tagihan", "0").strip()
@@ -535,14 +460,14 @@ def tambah_pelanggan():
     # Validasi input
     if not nama:
         flash("Nama pelanggan tidak boleh kosong.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("pelanggan"))
     try:
         tagihan = int(tagihan_raw)
         if tagihan <= 0:
             raise ValueError
     except ValueError:
         flash("Tagihan bulanan harus berupa angka positif.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("pelanggan"))
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -560,12 +485,14 @@ def tambah_pelanggan():
     )
     conn.commit()
     conn.close()
+    log_action(session.get("username", "system"), "Tambah Pelanggan", f"Menambahkan pelanggan baru: {nama}")
     flash("Anggota berhasil disimpan.", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("pelanggan"))
 
 
 @app.route("/edit_pelanggan/<int:id>", methods=["GET", "POST"])
 @login_required
+@password_change_required
 def edit_pelanggan(id):
     """Edit data pelanggan (nama, tagihan, nomor WA)."""
     conn = get_db_connection()
@@ -604,6 +531,7 @@ def edit_pelanggan(id):
         )
         conn.commit()
         conn.close()
+        log_action(session.get("username", "system"), "Edit Pelanggan", f"Mengubah data pelanggan ID {id}: {nama_baru}")
         flash("Perubahan data berhasil disimpan.", "success")
         return redirect(url_for("index"))
 
@@ -614,12 +542,14 @@ def edit_pelanggan(id):
 @app.route("/hapus_pelanggan/<int:id>", methods=["POST"])
 @login_required
 @admin_required
+@password_change_required
 def hapus_pelanggan(id):
     """Hapus pelanggan beserta semua data pembayarannya (CASCADE)."""
     conn = get_db_connection()
     conn.execute("DELETE FROM pelanggan WHERE id = ?", (id,))
     conn.commit()
     conn.close()
+    log_action(session.get("username", "system"), "Hapus Pelanggan", f"Menghapus pelanggan ID {id}")
     flash("Pelanggan berhasil dihapus.", "success")
     return redirect(url_for("index"))
 
@@ -629,6 +559,7 @@ def hapus_pelanggan(id):
 # =============================================================================
 @app.route("/update_catatan/<int:id>", methods=["POST"])
 @login_required
+@password_change_required
 def update_catatan(id):
     """Update field catatan pada record pembayaran."""
     catatan_baru = request.form.get("catatan", "").strip()
@@ -637,11 +568,12 @@ def update_catatan(id):
     conn.commit()
     conn.close()
     flash("Catatan berhasil disimpan.", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("transaksi"))
 
 
 @app.route("/lunas/<int:id>", methods=["POST"])
 @login_required
+@password_change_required
 def set_lunas(id):
     """Set 1-6 tagihan paling lama menjadi Lunas untuk pelanggan terkait."""
     months = request.args.get("months", default=1, type=int)
@@ -658,7 +590,7 @@ def set_lunas(id):
     if not payment:
         conn.close()
         flash("Data pembayaran tidak ditemukan.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("transaksi"))
 
     pelanggan_id = payment["pelanggan_id"]
     unpaid_payments = conn.execute(
@@ -674,10 +606,11 @@ def set_lunas(id):
             ("Lunas", tanggal_sekarang, *payment_ids),
         )
         conn.commit()
+        log_action(session.get("username", "system"), "Update Pembayaran", f"Set Lunas {len(payment_ids)} bulan untuk pelanggan ID {pelanggan_id}")
 
     conn.close()
     flash(f"Pembayaran {len(payment_ids)} bulan berhasil diupdate ke Lunas.", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("transaksi"))
 
 
 # =============================================================================
@@ -685,6 +618,7 @@ def set_lunas(id):
 # =============================================================================
 @app.route("/nota/<int:id>")
 @login_required
+@password_change_required
 def cetak_nota(id):
     """Cetak nota digital untuk pembayaran yang sudah Lunas."""
     conn = get_db_connection()
@@ -711,6 +645,7 @@ def cetak_nota(id):
 # =============================================================================
 @app.route("/kirim_wa_lunas/<int:id>", methods=["POST"])
 @login_required
+@password_change_required
 def kirim_wa_lunas(id):
     """Kirim nota PDF via WA ke pelanggan yang sudah Lunas."""
     conn = get_db_connection()
@@ -738,20 +673,13 @@ def kirim_wa_lunas(id):
         }
 
         # Generate PDF nota
-        pdf_bytes = generate_pdf_nota(nota_data)
+        pdf_bytes = generate_pdf_nota(nota_data, app.root_path)
 
-        caption_wa = (
-            f"🟢 *BUKTI PEMBAYARAN INTERNET LUNAS*\n\n"
-            f"Yth. Bapak/Ibu *{info['nama']}*,\n"
-            f"Terima kasih, pembayaran tagihan internet Anda telah kami terima.\n\n"
-            f"📦 *Detail Transaksi:*\n"
-            f"• Periode Bulan: {info['bulan_tagihan']}\n"
-            f"• Jumlah Bayar: Rp {info['jumlah_bayar']:,}\n"
-            f"• Waktu Sukses: {info['tanggal_bayar']} WIB\n\n"
-            f"Status Tagihan Anda saat ini dinyatakan: *LUNAS/PAID*.\n\n"
-            f"📎 _Nota PDF terlampir. Simpan sebagai bukti pembayaran resmi._\n"
-            f"📱 _Pesan ini dikirim oleh sistem Billing Internet._"
-        )
+        template_wa = get_setting("pesan_lunas")
+        caption_wa = template_wa.replace("{nama}", str(info['nama'])) \
+                                .replace("{bulan_tagihan}", str(info['bulan_tagihan'])) \
+                                .replace("{jumlah_bayar}", f"{info['jumlah_bayar']:,}") \
+                                .replace("{tanggal_bayar}", str(info['tanggal_bayar']))
 
         no_nota = f"NOTA-{info['id']:04d}-{datetime.now().strftime('%m%Y')}"
         filename = f"{no_nota}.pdf"
@@ -769,12 +697,13 @@ def kirim_wa_lunas(id):
 
 @app.route("/kirim_wa_pengingat/<int:id>", methods=["POST"])
 @login_required
+@password_change_required
 def kirim_wa_pengingat(id):
     """Kirim pesan pengingat tagihan jatuh tempo ke pelanggan."""
     conn = get_db_connection()
     info = conn.execute(
         """
-        SELECT pelanggan.nama, pelanggan.no_wa,
+        SELECT pembayaran.id, pelanggan.nama, pelanggan.no_wa,
                pembayaran.bulan_tagihan, pembayaran.jumlah_bayar
         FROM pembayaran
         JOIN pelanggan ON pembayaran.pelanggan_id = pelanggan.id
@@ -785,35 +714,16 @@ def kirim_wa_pengingat(id):
     conn.close()
 
     if info and info["no_wa"]:
-        pesan_wa = (
-            f"⚠️ *PENGINGAT JATUH TEMPO PEMBAYARAN INTERNET*\n\n"
-            f"Yth. Bapak/Ibu *{info['nama']}*,\n"
-            f"Kami menginfokan bahwa tagihan internet Anda untuk bulan ini sudah terbit.\n\n"
-            f"📦 *Detail Tagihan:*\n"
-            f"• Nama: {info['nama']}\n"
-            f"• Periode Bulan: {info['bulan_tagihan']}\n"
-            f"• Total Tagihan: Rp {info['jumlah_bayar']:,}\n"
-            f"• Jatuh Tempo: Tanggal 10 Setiap Awal Bulan\n"
-            f"• Status: *BELUM DIBAYAR*\n\n"
-            f"💳 *Metode Pembayaran:*\n"
-            f"Pembayaran dapat dilakukan secara Cash atau Transfer melalui jalur resmi berikut:\n\n"
-            f"1. *Cash / Tunai* langsung ke Admin\n"
-            f"2. *Transfer Bank BCA*\n"
-            f"   • No. Rekening: *0284105318*\n"
-            f"   • A.N. Muh. Samsul Maarif\n"
-            f"3. *E-Wallet DANA*\n"
-            f"   • No. HP: *081542115429*\n"
-            f"   • A.N. Muh. Samsul Maarif\n"
-            f"4. *QRIS Standar Nasional*\n"
-            f"   • A.N. *MUH SAMSUL MAARIF, PULSA & INTERNET*\n"
-            f"   _(Barcode QRIS bisa meminta langsung ke Admin / Scan saat penagihan)_\n\n"
-            f"Mohon untuk melakukan pembayaran sebelum jatuh tempo agar layanan internet Anda tetap berjalan lancar. Terima kasih.\n\n"
-            f"📱 _Pesan ini dikirim otomatis oleh sistem Billing Internet._"
-        )
+        template_wa = get_setting("pesan_pengingat")
+        pesan_wa = template_wa.replace("{nama}", str(info['nama'])) \
+                              .replace("{bulan_tagihan}", str(info['bulan_tagihan'])) \
+                              .replace("{jumlah_bayar}", f"{info['jumlah_bayar']:,}")
         send_whatsapp(info["no_wa"], pesan_wa)
 
     flash("Pesan pengingat jatuh tempo berhasil dikirim via WhatsApp.", "success")
     return redirect(url_for("index"))
+
+
 
 
 # =============================================================================
@@ -836,6 +746,7 @@ def _is_valid_sqlite(filepath):
 @app.route("/backup")
 @login_required
 @admin_required
+@password_change_required
 def backup_page():
     return render_template("backup.html")
 
@@ -843,6 +754,7 @@ def backup_page():
 @app.route("/backup/download")
 @login_required
 @admin_required
+@password_change_required
 def backup_database():
     """Download backup database SQLite."""
     try:
@@ -861,6 +773,7 @@ def backup_database():
 @app.route("/backup/restore", methods=["POST"])
 @login_required
 @admin_required
+@password_change_required
 def restore_database():
     """Restore database dari file .db yang diupload. Validasi ketat."""
     if "db_file" not in request.files:
@@ -898,77 +811,6 @@ def restore_database():
     return redirect(url_for("backup_page"))
 
 
-# =============================================================================
-# ROUTES: SETUP 2FA
-# =============================================================================
-@app.route("/setup_2fa", methods=["GET", "POST"])
-@login_required
-def setup_2fa():
-    """Setup atau reset TOTP 2FA untuk akun yang sedang login."""
-    conn = get_db_connection()
-    user = conn.execute(
-        "SELECT totp_secret FROM admin_user WHERE username = ?", (session["username"],)
-    ).fetchone()
-
-    if request.method == "POST":
-        if "reset" in request.form:
-            conn.execute(
-                "UPDATE admin_user SET totp_secret = '' WHERE username = ?",
-                (session["username"],),
-            )
-            conn.commit()
-            conn.close()
-            flash("Keamanan 2FA berhasil dinonaktifkan.", "success")
-            return redirect(url_for("setup_2fa"))
-
-        temp_secret = session.get("temp_totp_secret")
-        if not temp_secret:
-            flash("Sesi telah berakhir, silakan muat ulang halaman.", "error")
-            conn.close()
-            return redirect(url_for("setup_2fa"))
-
-        kode_verifikasi = request.form.get("totp_code", "").strip()
-        totp = pyotp.TOTP(temp_secret)
-        if totp.verify(kode_verifikasi):
-            conn.execute(
-                "UPDATE admin_user SET totp_secret = ? WHERE username = ?",
-                (temp_secret, session["username"]),
-            )
-            conn.commit()
-            session.pop("temp_totp_secret", None)
-            conn.close()
-            flash(
-                "Keamanan 2FA berhasil diaktifkan! Gunakan aplikasi Authenticator saat login berikutnya.",
-                "success",
-            )
-            return redirect(url_for("index"))
-        else:
-            conn.close()
-            flash(
-                "Kode verifikasi salah! Pastikan Anda memasukkan kode yang tepat dari aplikasi.",
-                "error",
-            )
-            return redirect(url_for("setup_2fa"))
-
-    sudah_aktif = bool(user["totp_secret"])
-    conn.close()
-
-    qr_url = None
-    if not sudah_aktif:
-        if "temp_totp_secret" not in session:
-            session["temp_totp_secret"] = pyotp.random_base32()
-        totp_uri = pyotp.TOTP(session["temp_totp_secret"]).provisioning_uri(
-            name=session["username"], issuer_name="Billing Internet"
-        )
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote(totp_uri)}"
-
-    return render_template(
-        "setup_2fa.html",
-        sudah_aktif=sudah_aktif,
-        qr_url=qr_url,
-        secret=session.get("temp_totp_secret"),
-    )
-
 
 # =============================================================================
 # ROUTES: GANTI PASSWORD
@@ -1001,7 +843,7 @@ def ganti_password():
             return redirect(url_for("ganti_password"))
 
         conn.execute(
-            "UPDATE admin_user SET password = ? WHERE username = ?",
+            "UPDATE admin_user SET password = ?, force_password_change = 0 WHERE username = ?",
             (generate_password_hash(password_baru), session["username"]),
         )
         conn.commit()
@@ -1017,11 +859,45 @@ def ganti_password():
 
 
 # =============================================================================
+# ROUTES: GANTI WHATSAPP
+# =============================================================================
+@app.route("/ganti_wa", methods=["GET", "POST"])
+@login_required
+@password_change_required
+def ganti_wa():
+    """Endpoint untuk mengubah nomor WhatsApp."""
+    if request.method == "POST":
+        no_wa_baru = request.form.get("no_wa", "").strip()
+        
+        if not no_wa_baru:
+            flash("Nomor WhatsApp harus diisi.", "error")
+            return redirect(url_for("ganti_wa"))
+            
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE admin_user SET no_wa = ? WHERE username = ?",
+            (no_wa_baru, session["username"]),
+        )
+        conn.commit()
+        conn.close()
+        
+        flash("Nomor WhatsApp berhasil diubah.", "success")
+        return redirect(url_for("index"))
+        
+    conn = get_db_connection()
+    user = conn.execute("SELECT no_wa FROM admin_user WHERE username = ?", (session["username"],)).fetchone()
+    conn.close()
+    current_wa = user["no_wa"] if user and user["no_wa"] else ""
+    
+    return render_template("ganti_wa.html", current_wa=current_wa)
+
+# =============================================================================
 # ROUTES: WHATSAPP GATEWAY
 # =============================================================================
 @app.route("/whatsapp")
 @login_required
 @admin_required
+@password_change_required
 def whatsapp_status():
     """Halaman panel WA Gateway — tampil QR atau status koneksi."""
     try:
@@ -1039,6 +915,7 @@ def whatsapp_status():
 @app.route("/whatsapp/logout")
 @login_required
 @admin_required
+@password_change_required
 def whatsapp_logout():
     """Putus koneksi WA dan hapus sesi autentikasi Baileys."""
     try:
@@ -1051,6 +928,7 @@ def whatsapp_logout():
 @app.route("/api/wa-status")
 @login_required
 @admin_required
+@password_change_required
 def wa_status_api():
     """Endpoint JSON ringan untuk polling cepat status koneksi WA dari frontend."""
     try:
@@ -1059,6 +937,151 @@ def wa_status_api():
     except Exception:
         data = {"connected": False, "qr": None}
     return jsonify(data)
+
+
+# =============================================================================
+# ROUTES: AUDIT LOG
+# =============================================================================
+@app.route("/audit_log")
+@login_required
+@admin_required
+@password_change_required
+def audit_log():
+    """Menampilkan log aktivitas."""
+    conn = get_db_connection()
+    logs = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 500").fetchall()
+    conn.close()
+    return render_template("audit_log.html", logs=logs)
+
+
+# =============================================================================
+# ROUTES: PENGATURAN PESAN WA
+# =============================================================================
+@app.route("/pengaturan_pesan", methods=["GET", "POST"])
+@login_required
+@admin_required
+@password_change_required
+def pengaturan_pesan():
+    """Dashboard untuk mengedit template pesan WA tagihan & pelunasan."""
+    if request.method == "POST":
+        pesan_lunas = request.form.get("pesan_lunas", "").strip()
+        pesan_pengingat = request.form.get("pesan_pengingat", "").strip()
+
+        if pesan_lunas:
+            set_setting("pesan_lunas", pesan_lunas)
+        if pesan_pengingat:
+            set_setting("pesan_pengingat", pesan_pengingat)
+
+        log_action(session.get("username", "system"), "Edit Template Pesan", "Mengubah template pesan WA")
+        flash("Template pesan berhasil disimpan.", "success")
+        return redirect(url_for("pengaturan_pesan"))
+
+    current_lunas = get_setting("pesan_lunas")
+    current_pengingat = get_setting("pesan_pengingat")
+    return render_template(
+        "pengaturan_pesan.html",
+        pesan_lunas=current_lunas,
+        pesan_pengingat=current_pengingat,
+    )
+
+
+# =============================================================================
+# ROUTES: MANAJEMEN PENGGUNA (RBAC)
+# =============================================================================
+@app.route("/manajemen_pengguna")
+@login_required
+@admin_required
+@password_change_required
+def manajemen_pengguna():
+    """Halaman manajemen pengguna (RBAC) — hanya untuk admin."""
+    conn = get_db_connection()
+    users = conn.execute("SELECT id, username, role, no_wa, force_password_change FROM admin_user ORDER BY username ASC").fetchall()
+    conn.close()
+    return render_template("manajemen_pengguna.html", users=users)
+
+@app.route("/tambah_pengguna", methods=["POST"])
+@login_required
+@admin_required
+@password_change_required
+def tambah_pengguna():
+    """Tambah pengguna baru."""
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "operator")
+    no_wa = request.form.get("no_wa", "").strip()
+
+    if not username or not password:
+        flash("Username dan password harus diisi.", "error")
+        return redirect(url_for("manajemen_pengguna"))
+
+    conn = get_db_connection()
+    existing = conn.execute("SELECT id FROM admin_user WHERE username = ?", (username,)).fetchone()
+    if existing:
+        conn.close()
+        flash("Username sudah digunakan.", "error")
+        return redirect(url_for("manajemen_pengguna"))
+
+    conn.execute(
+        "INSERT INTO admin_user (username, password, role, no_wa, force_password_change) VALUES (?, ?, ?, ?, ?)",
+        (username, generate_password_hash(password), role, no_wa, 1),
+    )
+    conn.commit()
+    conn.close()
+    flash(f"Pengguna '{username}' berhasil ditambahkan sebagai {role}.", "success")
+    log_action(session["username"], "Tambah Pengguna", f"Menambahkan {username} ({role})")
+    return redirect(url_for("manajemen_pengguna"))
+
+@app.route("/edit_pengguna/<int:id>", methods=["POST"])
+@login_required
+@admin_required
+@password_change_required
+def edit_pengguna(id):
+    """Edit data pengguna."""
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "operator")
+    no_wa = request.form.get("no_wa", "").strip()
+    force_password_change = 1 if request.form.get("force_password_change") else 0
+
+    conn = get_db_connection()
+    if password:
+        conn.execute(
+            "UPDATE admin_user SET username = ?, password = ?, role = ?, no_wa = ?, force_password_change = ? WHERE id = ?",
+            (username, generate_password_hash(password), role, no_wa, force_password_change, id),
+        )
+    else:
+        conn.execute(
+            "UPDATE admin_user SET username = ?, role = ?, no_wa = ?, force_password_change = ? WHERE id = ?",
+            (username, role, no_wa, force_password_change, id),
+        )
+    conn.commit()
+    conn.close()
+    flash("Data pengguna berhasil diperbarui.", "success")
+    log_action(session["username"], "Edit Pengguna", f"Mengubah data user ID {id}")
+    return redirect(url_for("manajemen_pengguna"))
+
+@app.route("/hapus_pengguna/<int:id>", methods=["POST"])
+@login_required
+@admin_required
+@password_change_required
+def hapus_pengguna(id):
+    """Hapus pengguna — tidak bisa menghapus diri sendiri."""
+    conn = get_db_connection()
+    current_user = conn.execute("SELECT id FROM admin_user WHERE username = ?", (session.get("username"),)).fetchone()
+    
+    if current_user and id == current_user["id"]:
+        conn.close()
+        flash("Tidak dapat menghapus akun Anda sendiri.", "error")
+        return redirect(url_for("manajemen_pengguna"))
+
+    user = conn.execute("SELECT username FROM admin_user WHERE id = ?", (id,)).fetchone()
+    deleted_name = user["username"] if user else f"ID {id}"
+    conn.execute("DELETE FROM admin_user WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    flash(f"Pengguna '{deleted_name}' berhasil dihapus.", "success")
+    log_action(session["username"], "Hapus Pengguna", f"Menghapus {deleted_name}")
+    return redirect(url_for("manajemen_pengguna"))
 
 
 # Custom handler untuk error 500 agar tidak membocorkan detail internal request

@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sistem Pembayaran Internet</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="apple-touch-icon" href="/static/Logo1.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='Logo1.png') }}">
+    <script>
+        // Set initial theme immediately with error handling
+        (function() {
+            try {
+                const savedTheme = localStorage.getItem('theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+                console.log('Theme initialized:', savedTheme || 'system preference (' + prefersDark + ')');
+            } catch (e) {
+                console.error('Error initializing theme:', e);
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (prefersDark) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }
+        })();
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        /* Logo quality optimization */
+        .logo-image {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.2);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.35);
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: rgba(75, 85, 99, 0.25);
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: rgba(75, 85, 99, 0.4);
+        }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+        .safe-area-bottom {
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        }
+    </style>
+</head>
+<body class="animate-fade-in-up bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/40 via-purple-50/20 to-white dark:from-indigo-900/20 dark:via-[#0b0f19] dark:to-[#0b0f19] min-h-screen transition-colors duration-300 pb-24 lg:pb-0">
+
+    <!-- SIDEBAR (Desktop only) -->
+    <aside class="hidden lg:flex flex-col w-64 fixed top-0 bottom-0 left-0 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-800/50 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)]">
+        <!-- Logo Section -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
+            <div class="p-1.5 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-500/20 dark:to-purple-500/10 rounded-xl border border-indigo-100/50 dark:border-indigo-500/20 shadow-inner">
+                <img src="{{ url_for('static', filename='Logo1.png') }}" alt="Logo" class="h-10 w-auto object-contain max-w-[120px] logo-image">
+            </div>
+            <span class="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">Billing Internet</span>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="flex-1 p-4 space-y-1.5 mt-4">
+            <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 font-bold transition-all shadow-sm">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Dashboard
+            </a>
+            <a href="/transaksi" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Transaksi
+            </a>
+            <a href="/pelanggan" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Pelanggan
+            </a>
+            <a href="/laporan" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Laporan
+            </a>
+            
+            {% if session['role'] == 'admin' %}
+            <a href="/whatsapp" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                Pengaturan WA
+            </a>
+            <a href="/backup" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Backup Database
+            </a>
+            <a href="/audit_log" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Audit Log
+            </a>
+            <a href="/pengaturan_pesan" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Template Pesan
+            </a>
+            <a href="/manajemen_pengguna" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 font-semibold transition-all">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Kelola Pengguna
+            </a>
+            {% endif %}
+        </nav>
+
+        <!-- Sidebar Footer Info & Logout -->
+        <div class="p-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+            <div class="flex items-center gap-3 px-3 py-2">
+                <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    {{ session['username'][0].upper() if session['username'] else 'U' }}
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold text-slate-855 dark:text-white truncate leading-none">{{ session['username'] }}</p>
+                    {% if session['role'] == 'admin' %}
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Admin</span>
+                    {% else %}
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Operator</span>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="/ganti_password" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-blue-600 dark:hover:text-blue-400 font-bold transition-all w-full mt-2">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span class="text-[13px] tracking-wide">Ganti Password</span>
+            </a>
+            <a href="/ganti_wa" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-blue-600 dark:hover:text-blue-400 font-bold transition-all w-full mt-1">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                <span class="text-[13px] tracking-wide">Ganti Nomor WA</span>
+            </a>
+            <a href="/logout" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold transition-all w-full">
+                <svg class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Keluar
+            </a>
+        </div>
+    </aside>
+
+    <!-- Mobile Slide-Out Menu -->
+    <div id="mobile-menu-overlay" class="lg:hidden hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-[55] transition-opacity duration-300 opacity-0" onclick="closeMobileMenu()"></div>
+    <div id="mobile-menu" class="lg:hidden fixed top-0 left-0 bottom-0 max-h-screen h-[100dvh] w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-[55] transform -translate-x-full transition-transform duration-300 ease-in-out shadow-2xl overflow-y-auto">
+        <!-- Menu Header -->
+        <div class="p-5 border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <img src="{{ url_for('static', filename='Logo1.png') }}" alt="Logo" class="h-12 w-auto object-contain max-w-[150px] logo-image">
+                <span class="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">Billing Internet</span>
+            </div>
+            <button onclick="closeMobileMenu()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- User Info -->
+        <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800/50">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center font-bold text-xs text-white">
+                    {{ session['username'][0].upper() if session['username'] else 'U' }}
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-slate-800 dark:text-white">{{ session['username'] }}</p>
+                    {% if session['role'] == 'admin' %}
+                    <span class="text-[9px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider">Admin</span>
+                    {% else %}
+                    <span class="text-[9px] text-sky-600 dark:text-sky-400 font-bold uppercase tracking-wider">Operator</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Menu Navigation -->
+        <nav class="p-4 space-y-1">
+            <p class="text-[9px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mb-2">Menu Utama</p>
+            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 font-bold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Dashboard
+            </a>
+            <a href="/transaksi" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Transaksi
+            </a>
+            <a href="/pelanggan" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Pelanggan
+            </a>
+            <a href="/laporan" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Laporan
+            </a>
+
+            {% if session['role'] == 'admin' %}
+            <p class="text-[9px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mt-4 mb-2">Admin Panel</p>
+            <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                Pengaturan WA
+            </a>
+            <a href="/backup" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Backup Database
+            </a>
+            <a href="/audit_log" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Audit Log
+            </a>
+            <a href="/pengaturan_pesan" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Template Pesan
+            </a>
+            <a href="/manajemen_pengguna" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Kelola Pengguna
+            </a>
+            {% endif %}
+
+            <p class="text-[9px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mt-4 mb-2">Akun</p>
+            <a href="/ganti_password" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                Ganti Password
+            </a>
+            <a href="/ganti_wa" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs transition-all" onclick="closeMobileMenu()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                Ganti Nomor WA
+            </a>
+
+            <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/50">
+                <a href="/logout" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-xs transition-all" onclick="closeMobileMenu()">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Keluar
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- MAIN BODY CONTAINER -->
+    <div class="lg:pl-64 flex flex-col min-h-screen">
+        
+        <!-- TOP HEADER BAR -->
+        <header class="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 sticky top-0 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] z-30 py-4 px-6 flex justify-between items-center no-print transition-colors duration-300">
+            <div class="flex items-center gap-3 lg:gap-0">
+                <!-- Hamburger Menu Button (Mobile/Tablet) -->
+                <button onclick="openMobileMenu()" class="lg:hidden p-2.5 rounded-xl bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-500/20 dark:hover:bg-indigo-500/30 text-indigo-600 dark:text-indigo-400 transition duration-200 shadow-sm hover:shadow-md" aria-label="Menu">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+
+                <!-- Mobile Logo and text -->
+                <div class="flex items-center gap-2 lg:hidden">
+                    <img src="{{ url_for('static', filename='Logo1.png') }}" alt="Logo" class="h-6 w-auto object-contain">
+                    <h1 class="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">Billing Internet</h1>
+                </div>
+                
+                <h1 class="hidden lg:block font-extrabold text-lg text-slate-900 dark:text-white tracking-tight">Dashboard Overview</h1>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Theme Switcher -->
+                <button onclick="toggleTheme()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition duration-200 cursor-pointer relative z-[100]" aria-label="Toggle Theme">
+                    <svg id="sun-icon" class="pointer-events-none w-4 h-4 hidden dark:block text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                    </svg>
+                    <svg id="moon-icon" class="pointer-events-none w-4 h-4 block dark:hidden text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
+
+                <!-- Profile Info (Role Badge) -->
+                <div class="flex items-center">
+                    {% if session['role'] == 'admin' %}
+                    <span class="text-[9px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider lg:inline flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500"></span>
+                        Admin
+                    </span>
+                    {% else %}
+                    <span class="text-[9px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider lg:inline flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500"></span>
+                        Operator
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Logout Button (Mobile/Tablet Only) -->
+                <a href="/logout" class="lg:hidden p-2 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 transition duration-200" aria-label="Keluar">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </a>
+            </div>
+        </header>
+
+        <!-- MAIN MAIN CONTENT -->
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
+
+            <!-- ALERTS / NOTIFICATION CONTAINER -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <div class="space-y-3 print:hidden max-w-4xl" id="notif-container">
+                  {% for category, message in messages %}
+                    {% if category == 'error' %}
+                    <div class="flex items-center justify-between p-3.5 bg-slate-100 dark:bg-slate-900 border border-rose-500/25 dark:border-rose-500/20 text-slate-800 dark:text-slate-200 rounded-xl shadow-sm transition-all duration-300">
+                      <div class="flex items-center gap-2.5 font-semibold text-xs sm:text-sm">
+                        <span class="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                        <span>{{ message }}</span>
+                      </div>
+                      <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer font-bold text-xs px-1.5">✕</button>
+                    </div>
+                    {% else %}
+                    <div class="flex items-center justify-between p-3.5 bg-slate-100 dark:bg-slate-900 border border-emerald-500/25 dark:border-emerald-500/20 text-slate-800 dark:text-slate-200 rounded-xl shadow-sm transition-all duration-300">
+                      <div class="flex items-center gap-2.5 font-semibold text-xs sm:text-sm">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span>{{ message }}</span>
+                      </div>
+                      <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer font-bold text-xs px-1.5">✕</button>
+                    </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                
+                <script>
+                    setTimeout(() => {
+                        const box = document.getElementById('notif-container');
+                        if (box) {
+                            box.style.opacity = '0';
+                            box.style.transform = 'translateY(-6px)';
+                            box.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                            setTimeout(() => box.remove(), 300);
+                        }
+                    }, 4000);
+                </script>
+              {% endif %}
+            {% endwith %}
+
+            <!-- STATS CARDS GRID -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 print:hidden">
+                <!-- Card 1: Total Pemasukan -->
+                <div class="relative overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600 p-5 rounded-2xl shadow-lg shadow-indigo-500/20 border border-indigo-400/30 flex items-center justify-between group transition-all duration-300 hover:-translate-y-1 hover:shadow-indigo-500/40 text-white">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all duration-500"></div>
+                    <div class="space-y-1">
+                        <span class="text-[9px] font-bold text-indigo-100 uppercase tracking-widest block font-medium">Total Pendapatan (All-Time)</span>
+                        <h3 class="text-lg sm:text-xl font-extrabold tracking-tight text-white font-mono drop-shadow-md">Rp {{ "{:,}".format(total_pemasukan) }}</h3>
+                    </div>
+                    <div class="relative z-10 p-2.5 bg-white/20 backdrop-blur-sm rounded-xl text-white border border-white/20 shadow-inner">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Card 2: Bulan Ini -->
+                <div class="relative overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-500 p-5 rounded-2xl shadow-lg shadow-emerald-500/20 border border-emerald-400/30 flex items-center justify-between group transition-all duration-300 hover:-translate-y-1 hover:shadow-emerald-500/40 text-white">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all duration-500"></div>
+                    <div class="space-y-1">
+                        <span class="text-[9px] font-bold text-emerald-50 uppercase tracking-widest block font-medium">Pendapatan Bulan Ini</span>
+                        <h3 class="text-lg sm:text-xl font-extrabold tracking-tight text-white font-mono drop-shadow-md">Rp {{ "{:,}".format(pemasukan_bulan_ini) }}</h3>
+                    </div>
+                    <div class="relative z-10 p-2.5 bg-white/20 backdrop-blur-sm rounded-xl text-white border border-white/20 shadow-inner">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Card 3: Belum Bayar -->
+                <div class="relative overflow-hidden bg-gradient-to-br from-rose-400 to-orange-500 p-5 rounded-2xl shadow-lg shadow-rose-500/20 border border-rose-400/30 flex items-center justify-between group transition-all duration-300 hover:-translate-y-1 hover:shadow-rose-500/40 text-white">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all duration-500"></div>
+                    <div class="space-y-1">
+                        <span class="text-[9px] font-bold text-rose-50 uppercase tracking-widest block font-medium">Piutang Belum Bayar (Bulan Ini)</span>
+                        <h3 class="text-lg sm:text-xl font-extrabold tracking-tight text-white font-mono drop-shadow-md">Rp {{ "{:,}".format(piutang_bulan_ini) }}</h3>
+                    </div>
+                    <div class="relative z-10 p-2.5 bg-white/20 backdrop-blur-sm rounded-xl text-white border border-white/20 shadow-inner">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REVENUE CHART CARD -->
+            <div class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-5 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 print:hidden transition-colors duration-300">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-extrabold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        Grafik Perkembangan Pemasukan Bulanan
+                    </h2>
+                </div>
+                <div class="h-[200px] sm:h-[250px] w-full">
+                    <canvas id="pemasukanChart"></canvas>
+                </div>
+            </div>
+
+            <!-- QUICK ACTIONS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <a href="/transaksi" class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-4 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 hover:shadow-xl transition-all duration-300 group">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 dark:text-white text-sm">Kelola Transaksi</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Lihat semua pembayaran</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="/pelanggan" class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-4 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 hover:shadow-xl transition-all duration-300 group">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 dark:text-white text-sm">Kelola Pelanggan</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ pelanggan|length }} pelanggan aktif</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="/laporan" class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-4 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 hover:shadow-xl transition-all duration-300 group">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-violet-100 dark:bg-violet-500/20 rounded-xl text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 dark:text-white text-sm">Laporan Keuangan</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Rekap bulanan</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="/pelanggan#add-pelanggan-section" class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-4 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 hover:shadow-xl transition-all duration-300 group">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-amber-100 dark:bg-amber-500/20 rounded-xl text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 dark:text-white text-sm">Tambah Pelanggan</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Daftar pelanggan baru</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- PELANGGAN TABLE WITH PAGINATION -->
+            <div class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-5 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 transition-colors duration-300">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-extrabold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        Daftar Pelanggan
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 dark:text-slate-400">Total: {{ total_pelanggan }}</span>
+                        <a href="/pelanggan" class="text-xs bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 dark:hover:bg-indigo-500/30 transition-all">
+                            Lihat Semua
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-700">
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Nama</th>
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">No. WA</th>
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Tagihan Bulanan</th>
+                                <th class="text-right py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in pelanggan %}
+                            <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <td class="py-3 px-3">
+                                    <div class="font-bold text-slate-800 dark:text-white">{{ p.nama }}</div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <div class="text-slate-600 dark:text-slate-400">{{ p.no_wa or '-' }}</div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <div class="font-mono text-slate-700 dark:text-slate-300">Rp {{ "{:,}".format(p.tagihan_bulanan) }}</div>
+                                </td>
+                                <td class="py-3 px-3 text-right">
+                                    <a href="/edit_pelanggan/{{ p.id }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-bold text-xs">
+                                        Edit
+                                    </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                                    Tidak ada data pelanggan
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination for Pelanggan -->
+                {% if total_pages_pelanggan > 1 %}
+                <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                        Halaman {{ page_pelanggan }} dari {{ total_pages_pelanggan }}
+                    </div>
+                    <div class="flex gap-2">
+                        {% if page_pelanggan > 1 %}
+                        <a href="/dashboard?page_pelanggan={{ page_pelanggan - 1 }}&page_transaksi={{ page_transaksi }}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                            ← Prev
+                        </a>
+                        {% endif %}
+                        
+                        {% for page_num in range(1, total_pages_pelanggan + 1) %}
+                            {% if page_num == page_pelanggan %}
+                            <span class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold">{{ page_num }}</span>
+                            {% elif page_num <= 3 or page_num > total_pages_pelanggan - 3 or (page_num >= page_pelanggan - 1 and page_num <= page_pelanggan + 1) %}
+                            <a href="/dashboard?page_pelanggan={{ page_num }}&page_transaksi={{ page_transaksi }}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                                {{ page_num }}
+                            </a>
+                            {% elif page_num == 4 or page_num == total_pages_pelanggan - 2 %}
+                            <span class="px-3 py-1.5 text-slate-400">...</span>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_pelanggan < total_pages_pelanggan %}
+                        <a href="/dashboard?page_pelanggan={{ page_pelanggan + 1 }}&page_transaksi={{ page_transaksi }}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                            Next →
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- TRANSAKSI TABLE WITH PAGINATION -->
+            <div class="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-5 rounded-2xl shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200/60 dark:border-slate-800/60 transition-colors duration-300">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-extrabold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Transaksi Terbaru
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 dark:text-slate-400">Total: {{ total_transaksi }}</span>
+                        <a href="/transaksi" class="text-xs bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 dark:hover:bg-indigo-500/30 transition-all">
+                            Lihat Semua
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-700">
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Pelanggan</th>
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Bulan Tagihan</th>
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Jumlah</th>
+                                <th class="text-left py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Status</th>
+                                <th class="text-right py-3 px-3 font-bold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wider">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in transaksi %}
+                            <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <td class="py-3 px-3">
+                                    <div class="font-bold text-slate-800 dark:text-white">{{ t.nama_pelanggan }}</div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <div class="text-slate-600 dark:text-slate-400">{{ t.bulan_tagihan }}</div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <div class="font-mono text-slate-700 dark:text-slate-300">Rp {{ "{:,}".format(t.jumlah_bayar) }}</div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    {% if t.status == 'Lunas' %}
+                                    <span class="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-full text-xs font-bold">Lunas</span>
+                                    {% else %}
+                                    <span class="px-2 py-1 bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 rounded-full text-xs font-bold">Belum Bayar</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-3 text-right">
+                                    <a href="/transaksi" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-bold text-xs">
+                                        Detail
+                                    </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                                    Tidak ada data transaksi
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination for Transaksi -->
+                {% if total_pages_transaksi > 1 %}
+                <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                        Halaman {{ page_transaksi }} dari {{ total_pages_transaksi }}
+                    </div>
+                    <div class="flex gap-2">
+                        {% if page_transaksi > 1 %}
+                        <a href="/dashboard?page_pelanggan={{ page_pelanggan }}&page_transaksi={{ page_transaksi - 1 }}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                            ← Prev
+                        </a>
+                        {% endif %}
+                        
+                        {% for page_num in range(1, total_pages_transaksi + 1) %}
+                            {% if page_num == page_transaksi %}
+                            <span class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold">{{ page_num }}</span>
+                            {% elif page_num <= 3 or page_num > total_pages_transaksi - 3 or (page_num >= page_transaksi - 1 and page_num <= page_transaksi + 1) %}
+                            <a href="/dashboard?page_pelanggan={{ page_pelanggan }}&page_transaksi={{ page_num }}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                                {{ page_num }}
+                            </a>
+                            {% elif page_num == 4 or page_num == total_pages_transaksi - 2 %}
+                            <span class="px-3 py-1.5 text-slate-400">...</span>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_transaksi < total_pages_transaksi %}
+                        <a href="/dashboard?page_pelanggan={{ page_pelanggan }}&page_transaksi={{ page_transaksi + 1 }}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                            Next →
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Bottom Navigation Bar (Mobile/Tablet) -->
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200/50 dark:border-slate-800/50 z-50 px-2 py-2 flex justify-around items-center safe-area-bottom shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.3)]">
+        <!-- Dashboard -->
+        <a href="/dashboard" class="flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400 px-3 py-1">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <span class="text-[9px] font-bold">Home</span>
+        </a>
+        <!-- Transaksi -->
+        <a href="/transaksi" class="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-1 transition">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span class="text-[9px] font-bold">Transaksi</span>
+        </a>
+        <!-- Pelanggan -->
+        <a href="/pelanggan" class="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-1 transition">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span class="text-[9px] font-bold">Pelanggan</span>
+        </a>
+        <!-- Theme Toggle -->
+        <button onclick="toggleTheme()" class="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-1 transition">
+            <svg class="w-5 h-5 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+            <svg class="w-5 h-5 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+            </svg>
+            <span class="text-[9px] font-bold">Tema</span>
+        </button>
+        <!-- Menu -->
+        <button onclick="openMobileMenu()" class="flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 px-3 py-1 transition bg-indigo-50 dark:bg-indigo-500/10 rounded-xl">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span class="text-[9px] font-bold">Menu</span>
+        </button>
+    </nav>
+
+<!-- Floating Menu Button (appears on scroll) -->
+<button id="floating-menu-btn" onclick="openMobileMenu()" class="lg:hidden fixed bottom-20 right-6 w-14 h-14 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center z-[60] transform scale-0 transition-transform duration-300 hover:scale-110 active:scale-95">
+    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+</button>
+
+<script>
+    // Floating menu button on scroll
+    const floatingMenuBtn = document.getElementById('floating-menu-btn');
+    
+    window.addEventListener('scroll', () => {
+        const currentScrollY = window.scrollY;
+        
+        // Show button when scrolled past 50px (more responsive)
+        if (currentScrollY > 50) {
+            floatingMenuBtn.classList.remove('scale-0');
+            floatingMenuBtn.classList.add('scale-100');
+        } else {
+            // Hide button when near top
+            floatingMenuBtn.classList.remove('scale-100');
+            floatingMenuBtn.classList.add('scale-0');
+        }
+    });
+
+    function openMobileMenu() {
+        const overlay = document.getElementById('mobile-menu-overlay');
+        const menu = document.getElementById('mobile-menu');
+        overlay.classList.remove('hidden');
+        setTimeout(() => {
+            overlay.classList.remove('opacity-0');
+            menu.classList.remove('-translate-x-full');
+        }, 10);
+        document.body.style.overflow = 'hidden';
+        // Reset menu scroll to top when opened
+        menu.scrollTop = 0;
+    }
+
+    function closeMobileMenu() {
+        const overlay = document.getElementById('mobile-menu-overlay');
+        const menu = document.getElementById('mobile-menu');
+        overlay.classList.add('opacity-0');
+        menu.classList.add('-translate-x-full');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+        }, 300);
+        document.body.style.overflow = '';
+    }
+
+    // Global variables for Theme management
+    function toggleTheme() {
+        try {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                console.log('Theme switched to light mode');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                console.log('Theme switched to dark mode');
+            }
+            // Dynamically update Chart styling
+            updateChartTheme();
+        } catch (e) {
+            console.error('Error toggling theme:', e);
+        }
+    }
+
+    let myChart = null;
+
+    function updateChartTheme() {
+        if (!myChart) return;
+        const isDark = document.documentElement.classList.contains('dark');
+        
+        myChart.options.scales.x.ticks.color = isDark ? '#94a3b8' : '#64748b';
+        myChart.options.scales.y.ticks.color = isDark ? '#94a3b8' : '#64748b';
+        myChart.options.scales.x.grid.color = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)';
+        myChart.options.scales.y.grid.color = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)';
+        myChart.update();
+    }
+
+    // Initialize Revenue Chart with customized line colors (neutral slate)
+    document.addEventListener('DOMContentLoaded', () => {
+        const ctx = document.getElementById('pemasukanChart').getContext('2d');
+        const isDark = document.documentElement.classList.contains('dark');
+        
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ chart_labels|tojson }},
+                datasets: [{
+                    label: 'Pemasukan Lunas',
+                    data: {{ chart_data|tojson }},
+                    borderColor: '#8b5cf6', // Violet
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: false,
+                    pointBackgroundColor: '#8b5cf6',
+                    pointBorderColor: '#8b5cf6',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                        titleColor: isDark ? '#f1f5f9' : '#1e293b',
+                        bodyColor: isDark ? '#cbd5e1' : '#475569',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                        borderWidth: 1,
+                        padding: 12,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return 'Rp ' + context.parsed.y.toLocaleString('id-ID');
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: isDark ? '#94a3b8' : '#64748b',
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: isDark ? '#94a3b8' : '#64748b',
+                            font: {
+                                size: 11
+                            },
+                            callback: function(value) {
+                                return 'Rp ' + (value / 1000000).toFixed(1) + 'jt';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
